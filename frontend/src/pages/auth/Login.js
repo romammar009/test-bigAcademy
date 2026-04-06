@@ -9,7 +9,7 @@ export default function Login() {
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
 
-  const { login } = useAuth();
+  const { login, getRedirectPath } = useAuth();
   const navigate  = useNavigate();
 
   const handleLogin = async (e) => {
@@ -21,11 +21,9 @@ export default function Login() {
       const res = await API.post('/auth/login/', { email, password });
       login(res.data.user, res.data.token);
 
-      // Redirect based on role
+      // Redirect based on role using central mapping
       const role = res.data.user.role;
-      if (role === 'educator')    navigate('/educator');
-      else if (role === 'admin')  navigate('/admin');
-      else if (role === 'super_admin') navigate('/superadmin');
+      navigate(getRedirectPath(role));
 
     } catch (err) {
       setError('Invalid email or password.');

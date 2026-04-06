@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import API from '../../api/axios';
-import SuperAdminStaff from './SuperAdminStaff';
-import SuperAdminUnlockRequests from './SuperAdminUnlockRequests';
-import SuperAdminReports from './SuperAdminReports';
+import HRManageUsers from './HRManageUsers';
+import HRUnlockRequests from './HRUnlockRequests';
+import HRReports from './HRReports';
 import NotificationBell from '../../components/NotificationBell';
 
-export default function SuperAdminDashboard() {
+export default function HRDashboard() {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState('staff');
+  const [activeTab, setActiveTab] = useState('users');
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -18,17 +18,23 @@ export default function SuperAdminDashboard() {
     navigate('/login');
   };
 
+  const isTier2 = user.role === 'hr_tier2';
+
   return (
     <div>
-      <nav className="navbar navbar-expand-lg navbar-dark bg-warning px-4">
-        <span className="navbar-brand fw-bold text-dark">Big Academy — Area Manager</span>
+      <nav className="navbar navbar-expand-lg navbar-dark bg-danger px-4">
+        <span className="navbar-brand fw-bold">
+          Big Academy — {isTier2 ? 'HR Head / Owner' : 'HR Team'}
+        </span>
         <div className="ms-auto d-flex align-items-center gap-3">
-          <span className="badge bg-dark">Area Manager</span>
-          <span className="text-dark fw-semibold">
+          <span className="badge bg-light text-danger">
+            {isTier2 ? 'HR Tier 2' : 'HR Tier 1'}
+          </span>
+          <span className="text-white">
             {user.first_name} {user.last_name}
           </span>
           <NotificationBell />
-          <button className="btn btn-outline-dark btn-sm" onClick={handleLogout}>
+          <button className="btn btn-outline-light btn-sm" onClick={handleLogout}>
             Logout
           </button>
         </div>
@@ -38,10 +44,10 @@ export default function SuperAdminDashboard() {
         <ul className="nav nav-tabs mb-4">
           <li className="nav-item">
             <button
-              className={`nav-link ${activeTab === 'staff' ? 'active' : ''}`}
-              onClick={() => setActiveTab('staff')}
+              className={`nav-link ${activeTab === 'users' ? 'active' : ''}`}
+              onClick={() => setActiveTab('users')}
             >
-              👥 Staff
+              👥 Users
             </button>
           </li>
           <li className="nav-item">
@@ -62,9 +68,9 @@ export default function SuperAdminDashboard() {
           </li>
         </ul>
 
-        {activeTab === 'staff'    && <SuperAdminStaff />}
-        {activeTab === 'requests' && <SuperAdminUnlockRequests />}
-        {activeTab === 'reports'  && <SuperAdminReports />}
+        {activeTab === 'users'    && <HRManageUsers isTier2={isTier2} />}
+        {activeTab === 'requests' && <HRUnlockRequests />}
+        {activeTab === 'reports'  && <HRReports />}
       </div>
     </div>
   );

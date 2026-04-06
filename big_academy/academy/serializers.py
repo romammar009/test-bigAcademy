@@ -2,11 +2,6 @@ from rest_framework import serializers
 from .models import (
     Users, Locations, Enrolments, Courses,
     CourseModules, Lessons, Quizzes,
-    QuizQuestions, QuizOptions
-)
-from .models import (
-    Users, Locations, Enrolments, Courses,
-    CourseModules, Lessons, Quizzes,
     QuizQuestions, QuizOptions,
     LessonProgress, Certificates
 )
@@ -81,30 +76,47 @@ class LessonSerializer(serializers.ModelSerializer):
 
 
 class CourseModuleSerializer(serializers.ModelSerializer):
-    lessons = LessonSerializer(many=True, read_only=True, source='lessons_set')
+    lessons = serializers.SerializerMethodField()
+    quizzes = serializers.SerializerMethodField()
 
     class Meta:
         model = CourseModules
-        fields = ['id', 'title', 'sort_order', 'lessons']
+        fields = ['id', 'title', 'sort_order', 'lessons', 'quizzes']
+
+    def get_lessons(self, module):
+        # Exclude quiz-type lessons
+        lessons = Lessons.objects.filter(
+            module=module
+        ).exclude(content_type='quiz').order_by('sort_order')
+        return LessonSerializer(lessons, many=True).data
+
+    def get_quizzes(self, module):
+        course = module.course
+        all_modules = list(CourseModules.objects.filter(
+            course=course
+        ).order_by('sort_order'))
+        if all_modules and all_modules[-1].id == module.id:
+            quizzes = Quizzes.objects.filter(course=course)
+            return QuizSerializer(quizzes, many=True).data
+        return []
 
 
 class CourseSerializer(serializers.ModelSerializer):
     modules = CourseModuleSerializer(many=True, read_only=True, source='coursemodules_set')
-    quizzes = QuizSerializer(many=True, read_only=True, source='quizzes_set')
 
     class Meta:
         model = Courses
         fields = [
             'id', 'title', 'description', 'version',
             'status', 'estimated_minutes', 'expiry_months',
-            'published_at', 'modules', 'quizzes'
+            'published_at', 'modules',
         ]
 
 
 class CourseCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Courses
-        fields = ['status','title', 'description', 'version', 'estimated_minutes', 'expiry_months']
+        fields = ['status', 'title', 'description', 'version', 'estimated_minutes', 'expiry_months']
 
 
 class ModuleCreateSerializer(serializers.ModelSerializer):

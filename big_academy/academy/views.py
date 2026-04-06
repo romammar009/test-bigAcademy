@@ -1,4 +1,5 @@
 import datetime
+import random
 
 import bcrypt
 from django.shortcuts import get_object_or_404, render
@@ -9,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from django.contrib.auth.models import User as DjangoUser
-from .models import QuizAttempts, QuizAnswers, QuizUnlockRequests
+from .models import QuizAttempts, QuizAnswers, QuizUnlockRequests, Notifications, SuperAdminLocations
 from .models import (
     Users, Enrolments, Courses, Assignments,
     CourseModules, Lessons, Quizzes,
@@ -30,14 +31,43 @@ from .serializers import (
 
 
 # ============================================================
-# HELPER — check if the logged in user is a super admin
+# ROLE CONSTANTS
 # ============================================================
-def is_super_admin(request):
-    token_key = request.auth
-    token     = Token.objects.get(key=token_key)
-    django_user = token.user
-    academy_user = Users.objects.get(email=django_user.username)
-    return academy_user.role == 'super_admin'
+HR_ROLES          = ['hr_tier1', 'hr_tier2']          # HR Team & HR Head
+MANAGEMENT_ROLES  = ['hr_tier1', 'hr_tier2', 'super_admin', 'admin']  # All management
+CONTENT_ROLES     = ['hr_tier1', 'super_admin', 'admin']  # Can CRUD courses/modules
+UNLOCK_ROLES      = ['hr_tier1', 'hr_tier2', 'super_admin', 'admin']  # Can review unlock requests
+ONBOARD_ROLES     = ['hr_tier1', 'hr_tier2']           # Can onboard/offboard users
+
+
+# ============================================================
+# HELPERS
+# ============================================================
+def get_academy_user(request):
+    try:
+        return Users.objects.get(email=request.user.username)
+    except Users.DoesNotExist:
+        return None
+
+
+def is_hr(request):
+    user = get_academy_user(request)
+    return user and user.role in HR_ROLES
+
+
+def is_management(request):
+    user = get_academy_user(request)
+    return user and user.role in MANAGEMENT_ROLES
+
+
+def create_notification(recipient, notif_type, title, message):
+    """Helper to create a notification for a user."""
+    Notifications.objects.create(
+        recipient=recipient,
+        notif_type=notif_type,
+        title=title,
+        message=message,
+    )
 
 
 # ============================================================
@@ -49,14 +79,12 @@ def login(request):
     email    = request.data.get('email')
     password = request.data.get('password')
 
-    # validate both fields were sent
     if not email or not password:
         return Response(
             {'error': 'Email and password are required.'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # check user exists and is active
     try:
         academy_user = Users.objects.get(email=email, status='active')
     except Users.DoesNotExist:
@@ -65,7 +93,6 @@ def login(request):
             status=status.HTTP_401_UNAUTHORIZED
         )
 
-    # check password
     stored_hash = academy_user.password_hash
     if not stored_hash:
         return Response(
@@ -84,17 +111,14 @@ def login(request):
             status=status.HTTP_401_UNAUTHORIZED
         )
 
-    # get or create Django auth user linked to this academy user
     django_user, created = DjangoUser.objects.get_or_create(
         username=academy_user.email,
         defaults={'email': academy_user.email}
     )
 
-    # update last login
     academy_user.last_login_at = timezone.now()
     academy_user.save()
 
-    # generate token
     token, _ = Token.objects.get_or_create(user=django_user)
 
     return Response({
@@ -130,145 +154,6 @@ def logout(request):
 
 
 # ============================================================
-# REGISTER / ONBOARD A NEW USER — Super Admin only
-# ============================================================
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def register_user(request):
-
-    # check the requester is a super admin
-    try:
-        academy_user = Users.objects.get(email=request.user.username)
-        if academy_user.role != 'super_admin':
-            return Response(
-                {'error': 'Only Super Admins can register new users.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-    except Users.DoesNotExist:
-        return Response(
-            {'error': 'Requester not found.'},
-            status=status.HTTP_403_FORBIDDEN
-        )
-
-    # validate incoming data
-    serializer = RegisterUserSerializer(data=request.data)
-    if not serializer.is_valid():
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    # hash the password
-    raw_password = request.data.get('password')
-    if not raw_password:
-        return Response(
-            {'error': 'Password is required.'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    hashed = bcrypt.hashpw(
-        raw_password.encode('utf-8'),
-        bcrypt.gensalt()
-    ).decode('utf-8')
-
-    # create the user
-    new_user = Users.objects.create(
-        email         = serializer.validated_data['email'],
-        first_name    = serializer.validated_data['first_name'],
-        last_name     = serializer.validated_data['last_name'],
-        role          = serializer.validated_data['role'],
-        location      = serializer.validated_data.get('location'),
-        phone_number  = serializer.validated_data.get('phone_number'),
-        password_hash = hashed,
-        status        = 'active',
-        created_at    = timezone.now(),
-        updated_at    = timezone.now(),
-    )
-
-    # onboarding — find all mandatory assignments for this role
-    mandatory_assignments = Assignments.objects.filter(
-        mandatory=True,
-        assignment_type='role',
-        target_value=new_user.role
-    )
-
-    enrolments_created = []
-    for assignment in mandatory_assignments:
-        enrolment = Enrolments.objects.create(
-            user       = new_user,
-            course     = assignment.course,
-            source     = 'assignment',
-            status     = 'not_started',
-            created_at = timezone.now(),
-            updated_at = timezone.now(),
-        )
-        enrolments_created.append(assignment.course.title)
-
-    return Response({
-        'message':            f"{new_user.first_name} {new_user.last_name} successfully onboarded.",
-        'user':               UserSerializer(new_user).data,
-        'courses_assigned':   enrolments_created,
-    }, status=status.HTTP_201_CREATED)
-
-
-# ============================================================
-# OFFBOARD A USER — Super Admin only
-# ============================================================
-@api_view(['PATCH'])
-@permission_classes([IsAuthenticated])
-def offboard_user(request, user_id):
-
-    # check the requester is a super admin
-    try:
-        academy_user = Users.objects.get(email=request.user.username)
-        if academy_user.role != 'super_admin':
-            return Response(
-                {'error': 'Only Super Admins can offboard users.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-    except Users.DoesNotExist:
-        return Response(
-            {'error': 'Requester not found.'},
-            status=status.HTTP_403_FORBIDDEN
-        )
-
-    # find the user to offboard
-    try:
-        user_to_offboard = Users.objects.get(id=user_id)
-    except Users.DoesNotExist:
-        return Response(
-            {'error': 'User not found.'},
-            status=status.HTTP_404_NOT_FOUND
-        )
-
-    # prevent offboarding yourself
-    if user_to_offboard.email == request.user.username:
-        return Response(
-            {'error': 'You cannot offboard yourself.'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    # disable the account
-    offboard_type = request.data.get('offboard_type', 'disabled')
-    if offboard_type not in ['disabled', 'terminated']:
-        offboard_type = 'disabled'
-
-    user_to_offboard.status     = offboard_type
-    user_to_offboard.updated_at = timezone.now()
-    user_to_offboard.save()
-
-    # invalidate their Django auth token if they are logged in
-    try:
-        django_user = DjangoUser.objects.get(username=user_to_offboard.email)
-        Token.objects.filter(user=django_user).delete()
-    except DjangoUser.DoesNotExist:
-        pass
-
-    return Response({
-        'message': f"{user_to_offboard.first_name} {user_to_offboard.last_name} has been {offboard_type}.",
-        'user_id': user_to_offboard.id,
-        'status':  user_to_offboard.status,
-    }, status=status.HTTP_200_OK)
-
-
-# ============================================================
 # GET CURRENT LOGGED IN USER PROFILE
 # ============================================================
 @api_view(['GET'])
@@ -283,24 +168,154 @@ def my_profile(request):
             {'error': 'User not found.'},
             status=status.HTTP_404_NOT_FOUND
         )
-    
+
 
 # ============================================================
-# HELPER — check if logged in user is admin or super admin
+# REGISTER / ONBOARD A NEW USER — HR only
 # ============================================================
-def is_admin_or_super(request):
-    try:
-        academy_user = Users.objects.get(email=request.user.username)
-        return academy_user.role in ['admin', 'super_admin']
-    except Users.DoesNotExist:
-        return False
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def register_user(request):
+    academy_user = get_academy_user(request)
+    if not academy_user:
+        return Response({'error': 'Requester not found.'}, status=status.HTTP_403_FORBIDDEN)
+
+    if academy_user.role not in ONBOARD_ROLES:
+        return Response(
+            {'error': 'Only HR can register new users.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    serializer = RegisterUserSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    raw_password = request.data.get('password')
+    if not raw_password:
+        return Response({'error': 'Password is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    hashed = bcrypt.hashpw(
+        raw_password.encode('utf-8'),
+        bcrypt.gensalt()
+    ).decode('utf-8')
+
+    new_user = Users.objects.create(
+        email         = serializer.validated_data['email'],
+        first_name    = serializer.validated_data['first_name'],
+        last_name     = serializer.validated_data['last_name'],
+        role          = serializer.validated_data['role'],
+        location      = serializer.validated_data.get('location'),
+        phone_number  = serializer.validated_data.get('phone_number'),
+        password_hash = hashed,
+        status        = 'active',
+        created_at    = timezone.now(),
+        updated_at    = timezone.now(),
+    )
+
+    mandatory_assignments = Assignments.objects.filter(
+        mandatory=True,
+        assignment_type='role',
+        target_value=new_user.role
+    )
+
+    enrolments_created = []
+    for assignment in mandatory_assignments:
+        Enrolments.objects.create(
+            user       = new_user,
+            course     = assignment.course,
+            source     = 'assignment',
+            status     = 'not_started',
+            created_at = timezone.now(),
+            updated_at = timezone.now(),
+        )
+        enrolments_created.append(assignment.course.title)
+
+    return Response({
+        'message':          f"{new_user.first_name} {new_user.last_name} successfully onboarded.",
+        'user':             UserSerializer(new_user).data,
+        'courses_assigned': enrolments_created,
+    }, status=status.HTTP_201_CREATED)
 
 
-def get_academy_user(request):
+# ============================================================
+# OFFBOARD A USER — HR only
+# ============================================================
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def offboard_user(request, user_id):
+    academy_user = get_academy_user(request)
+    if not academy_user:
+        return Response({'error': 'Requester not found.'}, status=status.HTTP_403_FORBIDDEN)
+
+    if academy_user.role not in ONBOARD_ROLES:
+        return Response(
+            {'error': 'Only HR can offboard users.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
     try:
-        return Users.objects.get(email=request.user.username)
+        user_to_offboard = Users.objects.get(id=user_id)
     except Users.DoesNotExist:
-        return None
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    if user_to_offboard.email == request.user.username:
+        return Response({'error': 'You cannot offboard yourself.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    offboard_type = request.data.get('offboard_type', 'disabled')
+    if offboard_type not in ['disabled', 'terminated']:
+        offboard_type = 'disabled'
+
+    user_to_offboard.status     = offboard_type
+    user_to_offboard.updated_at = timezone.now()
+    user_to_offboard.save()
+
+    try:
+        django_user = DjangoUser.objects.get(username=user_to_offboard.email)
+        Token.objects.filter(user=django_user).delete()
+    except DjangoUser.DoesNotExist:
+        pass
+
+    return Response({
+        'message': f"{user_to_offboard.first_name} {user_to_offboard.last_name} has been {offboard_type}.",
+        'user_id': user_to_offboard.id,
+        'status':  user_to_offboard.status,
+    }, status=status.HTTP_200_OK)
+
+
+# ============================================================
+# LIST USERS
+# ============================================================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_users(request):
+    academy_user = get_academy_user(request)
+    if not academy_user:
+        return Response({'error': 'User not found.'}, status=403)
+
+    if academy_user.role not in MANAGEMENT_ROLES:
+        return Response({'error': 'Access denied.'}, status=403)
+
+    if academy_user.role in HR_ROLES:
+        # HR sees all active users
+        users = Users.objects.filter(status='active')
+    elif academy_user.role == 'super_admin':
+        # Area Manager sees users from their assigned locations
+        assigned_location_ids = SuperAdminLocations.objects.filter(
+            user=academy_user
+        ).values_list('location_id', flat=True)
+        users = Users.objects.filter(
+            location_id__in=assigned_location_ids,
+            status='active'
+        )
+    else:
+        # Admin (branch manager) sees only their location
+        users = Users.objects.filter(
+            location=academy_user.location,
+            status='active'
+        )
+
+    serializer = UserSerializer(users, many=True)
+    return Response(serializer.data, status=200)
 
 
 # ============================================================
@@ -314,16 +329,14 @@ def course_list_create(request):
         return Response({'error': 'User not found.'}, status=status.HTTP_403_FORBIDDEN)
 
     if request.method == 'GET':
-        # all roles can view courses
         courses = Courses.objects.exclude(status='archived')
         serializer = CourseSerializer(courses, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     if request.method == 'POST':
-        # only admin and super_admin can create
-        if academy_user.role not in ['admin', 'super_admin']:
+        if academy_user.role not in CONTENT_ROLES:
             return Response(
-                {'error': 'Only Admins can create courses.'},
+                {'error': 'Only Admins and HR can create courses.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         serializer = CourseCreateSerializer(data=request.data)
@@ -364,11 +377,8 @@ def course_detail(request, course_id):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     if request.method == 'PATCH':
-        if academy_user.role not in ['admin', 'super_admin']:
-            return Response(
-                {'error': 'Only Admins can edit courses.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        if academy_user.role not in CONTENT_ROLES:
+            return Response({'error': 'Only Admins and HR can edit courses.'}, status=status.HTTP_403_FORBIDDEN)
         serializer = CourseCreateSerializer(course, data=request.data, partial=True)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -376,18 +386,41 @@ def course_detail(request, course_id):
         return Response(CourseSerializer(course).data, status=status.HTTP_200_OK)
 
     if request.method == 'DELETE':
-        if academy_user.role not in ['admin', 'super_admin']:
-            return Response(
-                {'error': 'Only Admins can archive courses.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        if academy_user.role not in CONTENT_ROLES:
+            return Response({'error': 'Only Admins and HR can archive courses.'}, status=status.HTTP_403_FORBIDDEN)
         course.status     = 'archived'
         course.updated_at = timezone.now()
         course.save()
-        return Response(
-            {'message': f'{course.title} has been archived.'},
-            status=status.HTTP_200_OK
-        )
+        return Response({'message': f'{course.title} has been archived.'}, status=status.HTTP_200_OK)
+
+
+# ============================================================
+# PUBLISH / UNPUBLISH COURSE
+# ============================================================
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def publish_course(request, course_id):
+    academy_user = get_academy_user(request)
+    if not academy_user:
+        return Response({'error': 'User not found.'}, status=403)
+
+    if academy_user.role not in CONTENT_ROLES:
+        return Response({'error': 'Access denied.'}, status=403)
+
+    course = get_object_or_404(Courses, id=course_id)
+    action = request.data.get('action')  # 'publish' or 'unpublish'
+
+    if action == 'publish':
+        course.status       = 'published'
+        course.published_at = timezone.now()
+    elif action == 'unpublish':
+        course.status = 'draft'
+    else:
+        return Response({'error': 'Action must be publish or unpublish.'}, status=400)
+
+    course.updated_at = timezone.now()
+    course.save()
+    return Response(CourseSerializer(course).data, status=200)
 
 
 # ============================================================
@@ -400,11 +433,8 @@ def module_create(request, course_id):
     if not academy_user:
         return Response({'error': 'User not found.'}, status=status.HTTP_403_FORBIDDEN)
 
-    if academy_user.role not in ['admin', 'super_admin']:
-        return Response(
-            {'error': 'Only Admins can add modules.'},
-            status=status.HTTP_403_FORBIDDEN
-        )
+    if academy_user.role not in CONTENT_ROLES:
+        return Response({'error': 'Only Admins and HR can add modules.'}, status=status.HTTP_403_FORBIDDEN)
 
     try:
         course = Courses.objects.get(id=course_id)
@@ -435,11 +465,8 @@ def lesson_create(request, module_id):
     if not academy_user:
         return Response({'error': 'User not found.'}, status=status.HTTP_403_FORBIDDEN)
 
-    if academy_user.role not in ['admin', 'super_admin']:
-        return Response(
-            {'error': 'Only Admins can add lessons.'},
-            status=status.HTTP_403_FORBIDDEN
-        )
+    if academy_user.role not in CONTENT_ROLES:
+        return Response({'error': 'Only Admins and HR can add lessons.'}, status=status.HTTP_403_FORBIDDEN)
 
     try:
         module = CourseModules.objects.get(id=module_id)
@@ -474,11 +501,8 @@ def quiz_create(request, course_id):
     if not academy_user:
         return Response({'error': 'User not found.'}, status=status.HTTP_403_FORBIDDEN)
 
-    if academy_user.role not in ['admin', 'super_admin']:
-        return Response(
-            {'error': 'Only Admins can add quizzes.'},
-            status=status.HTTP_403_FORBIDDEN
-        )
+    if academy_user.role not in CONTENT_ROLES:
+        return Response({'error': 'Only Admins and HR can add quizzes.'}, status=status.HTTP_403_FORBIDDEN)
 
     try:
         course = Courses.objects.get(id=course_id)
@@ -490,12 +514,12 @@ def quiz_create(request, course_id):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     quiz = Quizzes.objects.create(
-        course           = course,
-        title            = serializer.validated_data['title'],
+        course            = course,
+        title             = serializer.validated_data['title'],
         pass_mark_percent = serializer.validated_data['pass_mark_percent'],
-        attempt_limit    = serializer.validated_data.get('attempt_limit', 3),
-        created_at       = timezone.now(),
-        updated_at       = timezone.now(),
+        attempt_limit     = serializer.validated_data.get('attempt_limit', 3),
+        created_at        = timezone.now(),
+        updated_at        = timezone.now(),
     )
     return Response(QuizSerializer(quiz).data, status=status.HTTP_201_CREATED)
 
@@ -510,11 +534,8 @@ def question_create(request, quiz_id):
     if not academy_user:
         return Response({'error': 'User not found.'}, status=status.HTTP_403_FORBIDDEN)
 
-    if academy_user.role not in ['admin', 'super_admin']:
-        return Response(
-            {'error': 'Only Admins can add questions.'},
-            status=status.HTTP_403_FORBIDDEN
-        )
+    if academy_user.role not in CONTENT_ROLES:
+        return Response({'error': 'Only Admins and HR can add questions.'}, status=status.HTTP_403_FORBIDDEN)
 
     try:
         quiz = Quizzes.objects.get(id=quiz_id)
@@ -546,11 +567,8 @@ def option_create(request, question_id):
     if not academy_user:
         return Response({'error': 'User not found.'}, status=status.HTTP_403_FORBIDDEN)
 
-    if academy_user.role not in ['admin', 'super_admin']:
-        return Response(
-            {'error': 'Only Admins can add options.'},
-            status=status.HTTP_403_FORBIDDEN
-        )
+    if academy_user.role not in CONTENT_ROLES:
+        return Response({'error': 'Only Admins and HR can add options.'}, status=status.HTTP_403_FORBIDDEN)
 
     try:
         question = QuizQuestions.objects.get(id=question_id)
@@ -580,26 +598,21 @@ def browse_courses(request):
     if not academy_user:
         return Response({'error': 'User not found.'}, status=403)
 
-    # Get courses assigned to everyone
     all_assigned = Assignments.objects.filter(
         assignment_type='all'
     ).values_list('course_id', flat=True)
 
-    # Get courses assigned to this user's role
     role_assigned = Assignments.objects.filter(
         assignment_type='role',
         target_value=academy_user.role
     ).values_list('course_id', flat=True)
 
-    # Combine both
     assigned_course_ids = set(list(all_assigned) + list(role_assigned))
 
-    # Get courses user is already enrolled in
     enrolled_course_ids = Enrolments.objects.filter(
         user=academy_user
     ).values_list('course_id', flat=True)
 
-    # Show only assigned but not yet enrolled, and published
     courses = Courses.objects.filter(
         id__in=assigned_course_ids,
         status='published'
@@ -630,17 +643,9 @@ def enrol_course(request, course_id):
     except Courses.DoesNotExist:
         return Response({'error': 'Course not found or not published.'}, status=status.HTTP_404_NOT_FOUND)
 
-    # check if already enrolled
-    already_enrolled = Enrolments.objects.filter(
-        user=academy_user,
-        course=course
-    ).exists()
-
+    already_enrolled = Enrolments.objects.filter(user=academy_user, course=course).exists()
     if already_enrolled:
-        return Response(
-            {'error': 'You are already enrolled in this course.'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({'error': 'You are already enrolled in this course.'}, status=status.HTTP_400_BAD_REQUEST)
 
     enrolment = Enrolments.objects.create(
         user       = academy_user,
@@ -652,14 +657,14 @@ def enrol_course(request, course_id):
     )
 
     return Response({
-        'message':  f'Successfully enrolled in {course.title}.',
+        'message':      f'Successfully enrolled in {course.title}.',
         'enrolment_id': enrolment.id,
-        'status':   enrolment.status,
+        'status':       enrolment.status,
     }, status=status.HTTP_201_CREATED)
 
 
 # ============================================================
-# MY LEARNING — enrolled courses and progress
+# MY LEARNING
 # ============================================================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -688,19 +693,10 @@ def complete_lesson(request, lesson_id):
     except Lessons.DoesNotExist:
         return Response({'error': 'Lesson not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-    # check user is enrolled in the course
-    enrolled = Enrolments.objects.filter(
-        user=academy_user,
-        course=lesson.course
-    ).exists()
-
+    enrolled = Enrolments.objects.filter(user=academy_user, course=lesson.course).exists()
     if not enrolled:
-        return Response(
-            {'error': 'You are not enrolled in this course.'},
-            status=status.HTTP_403_FORBIDDEN
-        )
+        return Response({'error': 'You are not enrolled in this course.'}, status=status.HTTP_403_FORBIDDEN)
 
-    # get or create lesson progress
     progress, created = LessonProgress.objects.get_or_create(
         user   = academy_user,
         lesson = lesson,
@@ -714,58 +710,41 @@ def complete_lesson(request, lesson_id):
     )
 
     if not created:
-        # already exists — update it
         progress.status           = 'completed'
         progress.progress_percent = 100
         progress.completed_at     = timezone.now()
         progress.updated_at       = timezone.now()
         progress.save()
 
-    # check if all lessons in the module are completed
-    module = lesson.module
+    module          = lesson.module
     module_complete = False
 
     if module:
-        all_lessons = Lessons.objects.filter(module=module)
+        all_lessons       = Lessons.objects.filter(module=module)
         completed_lessons = LessonProgress.objects.filter(
-            user=academy_user,
-            lesson__in=all_lessons,
-            status='completed'
+            user=academy_user, lesson__in=all_lessons, status='completed'
         ).count()
-
         if completed_lessons == all_lessons.count():
             module_complete = True
 
-    # check if all modules in the course are completed
     course_complete = False
-    all_modules = CourseModules.objects.filter(course=lesson.course)
+    all_modules     = CourseModules.objects.filter(course=lesson.course)
     completed_modules = 0
 
     for mod in all_modules:
-        mod_lessons = Lessons.objects.filter(module=mod)
-        mod_completed = LessonProgress.objects.filter(
-            user=academy_user,
-            lesson__in=mod_lessons,
-            status='completed'
+        mod_lessons    = Lessons.objects.filter(module=mod)
+        mod_completed  = LessonProgress.objects.filter(
+            user=academy_user, lesson__in=mod_lessons, status='completed'
         ).count()
         if mod_completed == mod_lessons.count():
             completed_modules += 1
 
-    if completed_modules == all_modules.count():
-        course_complete = True
-
-        # update enrolment status
-        enrolment = Enrolments.objects.get(
-            user=academy_user,
-            course=lesson.course
-        )
-        enrolment.status       = 'completed'
-        enrolment.completed_at = timezone.now()
-        enrolment.updated_at   = timezone.now()
-        enrolment.save()
+        if completed_modules == all_modules.count():
+          course_complete = True
+    # Don't mark as completed here — only mark completed after quiz is passed
 
     return Response({
-        'message':       f'Lesson "{lesson.title}" marked as complete.',
+        'message':         f'Lesson "{lesson.title}" marked as complete.',
         'module_complete': module_complete,
         'course_complete': course_complete,
     }, status=status.HTTP_200_OK)
@@ -786,8 +765,9 @@ def my_certificates(request):
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-# ── QUIZ ATTEMPT SYSTEM ──────────────────────────────────────────────
-
+# ============================================================
+# QUIZ — Start Attempt (with shuffled MCQ options)
+# ============================================================
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def start_quiz_attempt(request, quiz_id):
@@ -797,30 +777,50 @@ def start_quiz_attempt(request, quiz_id):
 
     quiz = get_object_or_404(Quizzes, id=quiz_id)
 
-    attempt_count = QuizAttempts.objects.filter(user=academy_user, quiz=quiz).count()
-    if quiz.attempt_limit and attempt_count >= quiz.attempt_limit:
+    attempt_count = QuizAttempts.objects.filter(
+    user=academy_user, quiz=quiz, submitted_at__isnull=False
+    ).count()
+    if quiz.attempt_limit and attempt_count >= quiz.attempt_limit and not QuizAttempts.objects.filter(user=academy_user, quiz=quiz, passed=True).exists():
         return Response({'error': 'Quiz is locked. Maximum attempts reached.'}, status=403)
 
     attempt = QuizAttempts.objects.create(
-        user=academy_user,
-        quiz=quiz,
-        passed=False,
-        started_at=timezone.now(),
-        created_at=timezone.now()
+        user       = academy_user,
+        quiz       = quiz,
+        passed     = False,
+        started_at = timezone.now(),
+        created_at = timezone.now()
     )
+
+    # Build questions with shuffled MCQ options
+    questions_data = []
+    for q in quiz.quizquestions_set.all().order_by('sort_order'):
+        q_data = {
+            'id':            q.id,
+            'question_text': q.question_text,
+            'question_type': q.question_type,
+            'sort_order':    q.sort_order,
+        }
+        if q.question_type in ['mcq', 'truefalse']:
+            options = list(QuizOptions.objects.filter(question=q).values('id', 'option_text'))
+            random.shuffle(options)
+            q_data['options'] = options
+        else:
+            q_data['options'] = []
+        questions_data.append(q_data)
 
     return Response({
         'attempt_id':     attempt.id,
         'quiz_id':        quiz.id,
         'quiz_title':     quiz.title,
-        'question_count': quiz.quizquestions_set.count(),
         'attempt_number': attempt_count + 1,
-        'attempt_limit':  quiz.attempt_limit
+        'attempt_limit':  quiz.attempt_limit,
+        'questions':      questions_data,
     }, status=201)
 
 
-# ── SUBMIT QUIZ ATTEMPT ──────────────────────────────────────────────
-
+# ============================================================
+# QUIZ — Submit Attempt (MCQ auto-graded, short answers pending)
+# ============================================================
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def submit_quiz_attempt(request, attempt_id):
@@ -836,53 +836,308 @@ def submit_quiz_attempt(request, attempt_id):
     quiz         = attempt.quiz
     questions    = quiz.quizquestions_set.all()
     answers_data = request.data.get('answers', [])
-    correct_count = 0
-    total         = questions.count()
+
+    # Handle staff declaration
+    declaration_signed = request.data.get('declaration_signed', False)
+    declaration_name   = request.data.get('declaration_name', '').strip()
+
+    mcq_correct   = 0
+    mcq_total     = 0
+    has_short_ans = False
 
     for q in questions:
         submitted = next((a for a in answers_data if a.get('question_id') == q.id), None)
         if not submitted:
             continue
-        option_id = submitted.get('option_id')
-        try:
-            option     = QuizOptions.objects.get(id=option_id, question=q)
-            is_correct = option.is_correct
-        except QuizOptions.DoesNotExist:
-            is_correct = False
-            option     = None
 
-        QuizAnswers.objects.create(
-            attempt=attempt,
-            question=q,
-            selected_option=option,
-            is_correct=is_correct
-        )
-        if is_correct:
-            correct_count += 1
+        if q.question_type in ['mcq', 'truefalse']:
+            mcq_total += 1
+            option_id  = submitted.get('option_id')
+            try:
+                option     = QuizOptions.objects.get(id=option_id, question=q)
+                is_correct = option.is_correct
+            except QuizOptions.DoesNotExist:
+                is_correct = False
+                option     = None
 
-    score  = round((correct_count / total) * 100) if total > 0 else 0
-    passed = score >= quiz.pass_mark_percent
+            QuizAnswers.objects.create(
+                attempt         = attempt,
+                question        = q,
+                selected_option = option,
+                is_correct      = is_correct
+            )
+            if is_correct:
+                mcq_correct += 1
 
-    attempt.score_percent = score
-    attempt.passed        = passed
-    attempt.submitted_at  = timezone.now()
+        elif q.question_type == 'short_answer':
+            has_short_ans = True
+            answer_text   = submitted.get('answer_text', '').strip()
+            QuizAnswers.objects.create(
+                attempt           = attempt,
+                question          = q,
+                short_answer_text = answer_text,
+                is_correct        = False   # Will be set by admin during grading
+            )
+
+    # MCQ score (auto)
+    mcq_score = round((mcq_correct / mcq_total) * 100) if mcq_total > 0 else 0
+
+    # If no short answers, finalise now
+    grading_status = 'pending' if has_short_ans else 'graded'
+    passed         = (mcq_score >= quiz.pass_mark_percent) if not has_short_ans else False
+
+    attempt.score_percent      = mcq_score
+    attempt.passed             = passed
+    attempt.submitted_at       = timezone.now()
+    attempt.grading_status     = grading_status
+    attempt.declaration_signed = declaration_signed
+    attempt.declaration_name   = declaration_name
     attempt.save()
 
     attempt_count = QuizAttempts.objects.filter(user=academy_user, quiz=quiz).count()
     locked = bool(quiz.attempt_limit and attempt_count >= quiz.attempt_limit and not passed)
 
+    # If passed, mark the enrolment as completed
+    if passed and not has_short_ans:
+          try:
+            enrolment = Enrolments.objects.get(
+                  user=academy_user,
+                  course=quiz.course
+            )
+            enrolment.status       = 'completed'
+            enrolment.completed_at = timezone.now()
+            enrolment.updated_at   = timezone.now()
+            enrolment.save()
+
+            # Auto-generate certificate
+            existing_cert = Certificates.objects.filter(
+                  user=academy_user,
+                  course=quiz.course,
+                  course_version=quiz.course.version
+            ).first()
+            if not existing_cert:
+                 import uuid
+                 from dateutil.relativedelta import relativedelta
+                 cert_uuid  = uuid.uuid4()
+                 expires_at = None
+                 if quiz.course.expiry_months:
+                     expires_at = timezone.now() + relativedelta(months=quiz.course.expiry_months)
+                 Certificates.objects.create(
+                     certificate_id = cert_uuid,
+                     user           = academy_user,
+                     course         = quiz.course,
+                     course_version = quiz.course.version,
+                     issued_at      = timezone.now(),
+                     expires_at     = expires_at,
+                     created_at     = timezone.now(),
+                )
+                 create_notification(
+                     recipient  = academy_user,
+                     notif_type = 'certificate_issued',
+                     title      = 'Certificate Issued 🎓',
+                     message    = f'Congratulations! Your certificate for "{quiz.course.title}" is now available in your Certificates tab.'
+                )
+          except Enrolments.DoesNotExist:
+              pass
+    
+
+    # Notify user if quiz is locked
+    if locked:
+        create_notification(
+            recipient  = academy_user,
+            notif_type = 'quiz_locked',
+            title      = 'Quiz Locked',
+            message    = f'Your quiz "{quiz.title}" has been locked after {quiz.attempt_limit} failed attempts. Please request an unlock.'
+        )
+
+    # Build correct answers map to show in result screen
+    correct_answers = {}
+    for q in questions:
+         if q.question_type in ['mcq', 'truefalse']:
+             correct_opt = QuizOptions.objects.filter(question=q, is_correct=True).first()
+             if correct_opt:
+                     correct_answers[q.id] = {
+                         'correct_option_id':   correct_opt.id,
+                         'correct_option_text': correct_opt.option_text,
+                     }
+
     return Response({
-        'score_percent': score,
-        'passed':        passed,
-        'correct':       correct_count,
-        'total':         total,
-        'pass_mark':     quiz.pass_mark_percent,
-        'locked':        locked
+       'mcq_score':      mcq_score,
+       'passed':         passed,
+       'mcq_correct':    mcq_correct,
+       'mcq_total':      mcq_total,
+       'pass_mark':      quiz.pass_mark_percent,
+       'locked':         locked,
+       'grading_status': grading_status,
+       'correct_answers': correct_answers,
+       'message':        'Your short answers are pending admin review.' if has_short_ans else 'Quiz submitted.',
     }, status=200)
 
 
-# ── QUIZ UNLOCK REQUEST ──────────────────────────────────────────────
+# ============================================================
+# QUIZ — Admin grades short answers
+# ============================================================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def pending_short_answer_attempts(request):
+    """Admin sees all attempts with pending short answers at their location."""
+    academy_user = get_academy_user(request)
+    if not academy_user:
+        return Response({'error': 'User not found.'}, status=403)
 
+    if academy_user.role not in MANAGEMENT_ROLES:
+        return Response({'error': 'Access denied.'}, status=403)
+
+    attempts = QuizAttempts.objects.filter(
+        grading_status='pending',
+        submitted_at__isnull=False
+    ).select_related('user', 'quiz')
+
+    # Admins only see their location's users
+    if academy_user.role == 'admin':
+        attempts = attempts.filter(user__location=academy_user.location)
+    elif academy_user.role == 'super_admin':
+        assigned_location_ids = SuperAdminLocations.objects.filter(
+            user=academy_user
+        ).values_list('location_id', flat=True)
+        attempts = attempts.filter(user__location_id__in=assigned_location_ids)
+
+    data = []
+    for att in attempts:
+        short_answers = QuizAnswers.objects.filter(
+            attempt=att,
+            question__question_type='short_answer'
+        ).select_related('question')
+
+        data.append({
+            'attempt_id':    att.id,
+            'user_name':     f"{att.user.first_name} {att.user.last_name}",
+            'user_email':    att.user.email,
+            'quiz_title':    att.quiz.title,
+            'submitted_at':  att.submitted_at,
+            'mcq_score':     att.score_percent,
+            'short_answers': [
+                {
+                    'answer_id':     sa.id,
+                    'question_text': sa.question.question_text,
+                    'answer_text':   sa.short_answer_text,
+                    'is_correct':    sa.is_correct,
+                }
+                for sa in short_answers
+            ]
+        })
+
+    return Response(data, status=200)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def grade_short_answer_attempt(request, attempt_id):
+    """Admin submits grades for short answers."""
+    academy_user = get_academy_user(request)
+    if not academy_user:
+        return Response({'error': 'User not found.'}, status=403)
+
+    if academy_user.role not in MANAGEMENT_ROLES:
+        return Response({'error': 'Access denied.'}, status=403)
+
+    attempt = get_object_or_404(QuizAttempts, id=attempt_id)
+    grades  = request.data.get('grades', [])  # [{answer_id, is_correct}]
+
+    short_correct = 0
+    short_total   = 0
+
+    for grade in grades:
+        try:
+            answer             = QuizAnswers.objects.get(id=grade['answer_id'], attempt=attempt)
+            answer.is_correct  = grade['is_correct']
+            answer.save()
+            short_total += 1
+            if grade['is_correct']:
+                short_correct += 1
+        except QuizAnswers.DoesNotExist:
+            continue
+
+    short_score = round((short_correct / short_total) * 100) if short_total > 0 else 0
+
+    # Combine MCQ + short answer scores
+    # Weighted: MCQ = 65%, short answer = 35%
+    mcq_score    = attempt.score_percent or 0
+    final_score  = round((mcq_score * 0.65) + (short_score * 0.35))
+    passed       = final_score >= attempt.quiz.pass_mark_percent
+
+    attempt.short_answer_score = short_score
+    attempt.score_percent      = final_score
+    attempt.passed             = passed
+    attempt.grading_status     = 'graded'
+    attempt.graded_by          = academy_user
+    attempt.graded_at          = timezone.now()
+    attempt.save()
+
+    # If passed, mark enrolment as completed and generate certificate
+    if passed:
+        try:
+            enrolment = Enrolments.objects.get(
+                user=attempt.user,
+                course=attempt.quiz.course
+            )
+            enrolment.status       = 'completed'
+            enrolment.completed_at = timezone.now()
+            enrolment.updated_at   = timezone.now()
+            enrolment.save()
+
+            # Auto-generate certificate
+            existing_cert = Certificates.objects.filter(
+                user=attempt.user,
+                course=attempt.quiz.course,
+                course_version=attempt.quiz.course.version
+            ).first()
+            if not existing_cert:
+                import uuid
+                from dateutil.relativedelta import relativedelta
+                cert_uuid  = uuid.uuid4()
+                expires_at = None
+                if attempt.quiz.course.expiry_months:
+                    expires_at = timezone.now() + relativedelta(months=attempt.quiz.course.expiry_months)
+                Certificates.objects.create(
+                    certificate_id = cert_uuid,
+                    user           = attempt.user,
+                    course         = attempt.quiz.course,
+                    course_version = attempt.quiz.course.version,
+                    issued_at      = timezone.now(),
+                    expires_at     = expires_at,
+                    created_at     = timezone.now(),
+                )
+                create_notification(
+                    recipient  = attempt.user,
+                    notif_type = 'certificate_issued',
+                    title      = 'Certificate Issued 🎓',
+                    message    = f'Congratulations! Your certificate for "{attempt.quiz.course.title}" is now available in your Certificates tab.'
+                )
+        except Enrolments.DoesNotExist:
+            pass
+
+
+    # Notify the educator their short answers have been graded
+    create_notification(
+        recipient  = attempt.user,
+        notif_type = 'short_answer_graded',
+        title      = 'Quiz Graded',
+        message    = f'Your short answer responses for "{attempt.quiz.title}" have been reviewed. Final score: {final_score}%. {"Passed!" if passed else "Unfortunately you did not pass."}'
+    )
+
+    return Response({
+        'attempt_id':   attempt_id,
+        'mcq_score':    mcq_score,
+        'short_score':  short_score,
+        'final_score':  final_score,
+        'passed':       passed,
+    }, status=200)
+
+
+# ============================================================
+# QUIZ UNLOCK REQUEST
+# ============================================================
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def request_quiz_unlock(request, quiz_id):
@@ -905,10 +1160,10 @@ def request_quiz_unlock(request, quiz_id):
         return Response({'error': 'Please provide a reason for your unlock request.'}, status=400)
 
     unlock_request = QuizUnlockRequests.objects.create(
-        user=academy_user,
-        quiz=quiz,
-        reason=reason,
-        status='pending'
+        user   = academy_user,
+        quiz   = quiz,
+        reason = reason,
+        status = 'pending'
     )
 
     return Response({
@@ -918,8 +1173,9 @@ def request_quiz_unlock(request, quiz_id):
     }, status=201)
 
 
-# ── APPROVE / DENY UNLOCK REQUEST (Super Admin) ──────────────────────
-
+# ============================================================
+# REVIEW UNLOCK REQUEST — Management roles
+# ============================================================
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def review_unlock_request(request, request_id):
@@ -927,8 +1183,8 @@ def review_unlock_request(request, request_id):
     if not academy_user:
         return Response({'error': 'User not found.'}, status=403)
 
-    if academy_user.role != 'super_admin':
-        return Response({'error': 'Only Super Admins can review unlock requests.'}, status=403)
+    if academy_user.role not in UNLOCK_ROLES:
+        return Response({'error': 'Access denied.'}, status=403)
 
     unlock_request = get_object_or_404(QuizUnlockRequests, id=request_id)
 
@@ -950,12 +1206,285 @@ def review_unlock_request(request, request_id):
     if new_status == 'approved':
         QuizAttempts.objects.filter(user=unlock_request.user, quiz=unlock_request.quiz).delete()
 
+    # Notify the educator
+    create_notification(
+        recipient  = unlock_request.user,
+        notif_type = 'unlock_approved' if new_status == 'approved' else 'unlock_denied',
+        title      = f'Quiz Unlock {new_status.capitalize()}',
+        message    = f'Your unlock request for "{unlock_request.quiz.title}" has been {new_status}.' +
+                     (f' Note: {review_note}' if review_note else '')
+    )
+
     return Response({
         'message':     f'Unlock request {new_status}.',
         'request_id':  unlock_request.id,
         'status':      new_status,
         'review_note': review_note
     }, status=200)
+
+
+# ============================================================
+# LIST UNLOCK REQUESTS — Management roles
+# ============================================================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_unlock_requests(request):
+    academy_user = get_academy_user(request)
+    if not academy_user:
+        return Response({'error': 'User not found.'}, status=403)
+
+    if academy_user.role not in UNLOCK_ROLES:
+        return Response({'error': 'Access denied.'}, status=403)
+
+    requests = QuizUnlockRequests.objects.filter(status='pending').order_by('-requested_at')
+
+    data = []
+    for req in requests:
+        data.append({
+            'id':           req.id,
+            'user_name':    f"{req.user.first_name} {req.user.last_name}",
+            'quiz_title':   req.quiz.title,
+            'reason':       req.reason,
+            'requested_at': req.requested_at,
+            'status':       req.status,
+        })
+
+    return Response(data, status=200)
+
+
+# ============================================================
+# NOTIFICATIONS
+# ============================================================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def my_notifications(request):
+    academy_user = get_academy_user(request)
+    if not academy_user:
+        return Response({'error': 'User not found.'}, status=403)
+
+    notifications = Notifications.objects.filter(recipient=academy_user).order_by('-created_at')[:50]
+
+    data = [{
+        'id':         n.id,
+        'type':       n.notif_type,
+        'title':      n.title,
+        'message':    n.message,
+        'is_read':    n.is_read,
+        'created_at': n.created_at,
+    } for n in notifications]
+
+    unread_count = Notifications.objects.filter(recipient=academy_user, is_read=False).count()
+
+    return Response({'notifications': data, 'unread_count': unread_count}, status=200)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def mark_notifications_read(request):
+    academy_user = get_academy_user(request)
+    if not academy_user:
+        return Response({'error': 'User not found.'}, status=403)
+
+    notification_ids = request.data.get('ids', [])
+    if notification_ids:
+        Notifications.objects.filter(
+            recipient=academy_user, id__in=notification_ids
+        ).update(is_read=True)
+    else:
+        # Mark all as read
+        Notifications.objects.filter(recipient=academy_user).update(is_read=True)
+
+    return Response({'message': 'Notifications marked as read.'}, status=200)
+
+
+# ============================================================
+# REPORTS
+# ============================================================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def report_completion(request):
+    academy_user = get_academy_user(request)
+    if not academy_user:
+        return Response({'error': 'User not found.'}, status=403)
+
+    if academy_user.role not in MANAGEMENT_ROLES:
+        return Response({'error': 'Access denied.'}, status=403)
+
+    courses = Courses.objects.filter(status='published')
+    data    = []
+
+    for course in courses:
+        total       = Enrolments.objects.filter(course=course).count()
+        completed   = Enrolments.objects.filter(course=course, status='completed').count()
+        in_progress = Enrolments.objects.filter(course=course, status='in_progress').count()
+        not_started = Enrolments.objects.filter(course=course, status='not_started').count()
+
+        data.append({
+            'course_id':       course.id,
+            'course_title':    course.title,
+            'total':           total,
+            'completed':       completed,
+            'in_progress':     in_progress,
+            'not_started':     not_started,
+            'completion_rate': round((completed / total * 100), 1) if total > 0 else 0,
+        })
+
+    return Response(data, status=200)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def report_staff(request):
+    academy_user = get_academy_user(request)
+    if not academy_user:
+        return Response({'error': 'User not found.'}, status=403)
+
+    if academy_user.role not in MANAGEMENT_ROLES:
+        return Response({'error': 'Access denied.'}, status=403)
+
+    if academy_user.role in HR_ROLES:
+        users = Users.objects.filter(role='educator', status='active')
+    elif academy_user.role == 'super_admin':
+        assigned_location_ids = SuperAdminLocations.objects.filter(
+            user=academy_user
+        ).values_list('location_id', flat=True)
+        users = Users.objects.filter(
+            role='educator', status='active',
+            location_id__in=assigned_location_ids
+        )
+    else:
+        users = Users.objects.filter(
+            role='educator', status='active', location=academy_user.location
+        )
+
+    data = []
+    for user in users:
+        enrolments  = Enrolments.objects.filter(user=user)
+        completed   = enrolments.filter(status='completed').count()
+        in_progress = enrolments.filter(status='in_progress').count()
+        not_started = enrolments.filter(status='not_started').count()
+
+        # Check if user has any locked quizzes
+        locked_quiz_count = QuizAttempts.objects.filter(
+            user=user,
+            passed=False,
+        ).values('quiz').distinct().count()
+
+        data.append({
+            'user_id':           user.id,
+            'name':              f"{user.first_name} {user.last_name}",
+            'email':             user.email,
+            'location':          user.location.name if user.location else '—',
+            'completed':         completed,
+            'in_progress':       in_progress,
+            'not_started':       not_started,
+            'total':             enrolments.count(),
+            'has_locked_quiz':   locked_quiz_count > 0,  # Flag for warning icon in UI
+        })
+
+    return Response(data, status=200)
+
+
+# ============================================================
+# LESSON PROGRESS FOR A COURSE
+# ============================================================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def course_progress(request, course_id):
+    academy_user = get_academy_user(request)
+    if not academy_user:
+        return Response({'error': 'User not found.'}, status=403)
+
+    course  = get_object_or_404(Courses, id=course_id)
+    modules = CourseModules.objects.filter(course=course)
+
+    total_lessons        = 0
+    completed_lessons    = 0
+    completed_lesson_ids = []
+
+    for module in modules:
+        lessons = Lessons.objects.filter(module=module)
+        for lesson in lessons:
+            total_lessons += 1
+            progress = LessonProgress.objects.filter(
+                user=academy_user, lesson=lesson, status='completed'
+            ).exists()
+            if progress:
+                completed_lessons += 1
+                completed_lesson_ids.append(lesson.id)
+
+    percent = round((completed_lessons / total_lessons) * 100) if total_lessons > 0 else 0
+
+    return Response({
+        'course_id':            course_id,
+        'total_lessons':        total_lessons,
+        'completed_lessons':    completed_lessons,
+        'percent':              percent,
+        'completed_lesson_ids': completed_lesson_ids,
+    }, status=200)
+
+# ============================================================
+# QUIZ — Get last attempt answers (read-only result view)
+# ============================================================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def quiz_last_attempt_answers(request, quiz_id):
+    academy_user = get_academy_user(request)
+    if not academy_user:
+        return Response({'error': 'User not found.'}, status=403)
+
+    quiz = get_object_or_404(Quizzes, id=quiz_id)
+
+    last_attempt = QuizAttempts.objects.filter(
+        user=academy_user, quiz=quiz, submitted_at__isnull=False
+    ).order_by('-submitted_at').first()
+
+    if not last_attempt:
+        return Response({'error': 'No attempts found.'}, status=404)
+
+    answers = QuizAnswers.objects.filter(
+        attempt=last_attempt
+    ).select_related('question', 'selected_option')
+
+    correct_answers = {}
+    answers_data    = []
+
+    for ans in answers:
+        if ans.question.question_type in ['mcq', 'truefalse']:
+            correct_opt = QuizOptions.objects.filter(
+                question=ans.question, is_correct=True
+            ).first()
+            if correct_opt:
+                correct_answers[str(ans.question.id)] = {
+                    'correct_option_id':   correct_opt.id,
+                    'correct_option_text': correct_opt.option_text,
+                }
+            answers_data.append({
+                'question_id':   ans.question.id,
+                'question_text': ans.question.question_text,
+                'question_type': ans.question.question_type,
+                'selected_id':   ans.selected_option.id if ans.selected_option else None,
+                'selected_text': ans.selected_option.option_text if ans.selected_option else None,
+                'is_correct':    ans.is_correct,
+            })
+
+        elif ans.question.question_type == 'short_answer':
+            answers_data.append({
+                'question_id':   ans.question.id,
+                'question_text': ans.question.question_text,
+                'question_type': ans.question.question_type,
+                'selected_id':   None,
+                'selected_text': ans.short_answer_text,
+                'is_correct':    ans.is_correct,
+            })
+
+    return Response({
+        'score_percent':   last_attempt.score_percent,
+        'passed':          last_attempt.passed,
+        'answers':         answers_data,
+        'correct_answers': correct_answers,
+    }, status=200)
+
 
 
 # ============================================================
@@ -993,14 +1522,16 @@ def generate_certificate(request, course_id):
         course_version=course.version
     ).first()
 
+    now = timezone.now()
+    expires_at = None
+    if course.expiry_months:
+        expires_at = now + relativedelta(months=course.expiry_months)
+
     if existing:
         cert_uuid  = existing.certificate_id
         expires_at = existing.expires_at
     else:
-        cert_uuid  = uuid.uuid4()
-        expires_at = None
-        if course.expiry_months:
-            expires_at = now + relativedelta(months=course.expiry_months)
+        cert_uuid = uuid.uuid4()
         Certificates.objects.create(
             certificate_id = cert_uuid,
             user           = academy_user,
@@ -1010,83 +1541,69 @@ def generate_certificate(request, course_id):
             expires_at     = expires_at,
             created_at     = now,
         )
-
-    now = timezone.now()
-    expires_at = None
-    if course.expiry_months:
-        expires_at = now + relativedelta(months=course.expiry_months)
-
-    cert_uuid = uuid.uuid4()
+        # Notify the user
+        create_notification(
+            recipient  = academy_user,
+            notif_type = 'certificate_issued',
+            title      = 'Certificate Issued',
+            message    = f'Congratulations! Your certificate for "{course.title}" has been issued.'
+        )
 
     buffer = BytesIO()
     c = pdf_canvas.Canvas(buffer, pagesize=landscape(A4))
     width, height = landscape(A4)
 
-    # Background
     c.setFillColor(colors.HexColor('#f9f6f0'))
     c.rect(0, 0, width, height, fill=1, stroke=0)
 
-    # Border
     c.setStrokeColor(colors.HexColor('#2c5f2e'))
     c.setLineWidth(4)
     c.rect(1*cm, 1*cm, width - 2*cm, height - 2*cm, fill=0, stroke=1)
 
-    # Inner border
     c.setLineWidth(1)
     c.rect(1.3*cm, 1.3*cm, width - 2.6*cm, height - 2.6*cm, fill=0, stroke=1)
 
-    # Company name
     c.setFillColor(colors.HexColor('#2c5f2e'))
     c.setFont('Helvetica-Bold', 28)
     c.drawCentredString(width / 2, height - 3.5*cm, 'Big Childcare')
 
-    # Certificate title
     c.setFont('Helvetica-Bold', 22)
     c.setFillColor(colors.HexColor('#1a1a1a'))
     c.drawCentredString(width / 2, height - 5*cm, 'Certificate of Completion')
 
-    # Divider
     c.setStrokeColor(colors.HexColor('#2c5f2e'))
     c.setLineWidth(1.5)
     c.line(4*cm, height - 5.7*cm, width - 4*cm, height - 5.7*cm)
 
-    # This certifies that
     c.setFont('Helvetica', 14)
     c.setFillColor(colors.HexColor('#555555'))
     c.drawCentredString(width / 2, height - 7*cm, 'This certifies that')
 
-    # Recipient name
     full_name = f"{academy_user.first_name} {academy_user.last_name}"
     c.setFont('Helvetica-Bold', 26)
     c.setFillColor(colors.HexColor('#2c5f2e'))
     c.drawCentredString(width / 2, height - 8.5*cm, full_name)
 
-    # Has completed
     c.setFont('Helvetica', 14)
     c.setFillColor(colors.HexColor('#555555'))
     c.drawCentredString(width / 2, height - 10*cm, 'has successfully completed')
 
-    # Course name
     c.setFont('Helvetica-Bold', 18)
     c.setFillColor(colors.HexColor('#1a1a1a'))
     c.drawCentredString(width / 2, height - 11.5*cm, course.title)
 
-    # Completion date
     c.setFont('Helvetica', 12)
     c.setFillColor(colors.HexColor('#555555'))
     completion_date = enrolment.completed_at.strftime('%d %B %Y')
     c.drawCentredString(width / 2, height - 13*cm, f'Completed: {completion_date}')
 
-    # Expiry
     if expires_at:
         c.drawCentredString(width / 2, height - 13.8*cm, f'Valid until: {expires_at.strftime("%d %B %Y")}')
 
-    # Certificate ID
     c.setFont('Helvetica', 9)
     c.setFillColor(colors.HexColor('#999999'))
     c.drawCentredString(width / 2, 2.2*cm, f'Certificate ID: {cert_uuid}')
 
-    # Signature line
     c.setStrokeColor(colors.HexColor('#1a1a1a'))
     c.setLineWidth(1)
     c.line(width/2 - 4*cm, 3.5*cm, width/2 + 4*cm, 3.5*cm)
@@ -1098,16 +1615,6 @@ def generate_certificate(request, course_id):
     pdf_bytes = buffer.getvalue()
     buffer.close()
 
-    Certificates.objects.create(
-        certificate_id = cert_uuid,
-        user           = academy_user,
-        course         = course,
-        course_version = course.version,
-        issued_at      = now,
-        expires_at     = expires_at,
-        created_at     = now,
-    )
-
     from django.http import HttpResponse
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="certificate_{cert_uuid}.pdf"'
@@ -1115,168 +1622,98 @@ def generate_certificate(request, course_id):
 
 
 # ============================================================
-# LIST USERS — Admin/Super Admin only
+# QUIZ ATTEMPT STATUS — check attempts used and last result
 # ============================================================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def list_users(request):
+def quiz_attempt_status(request, quiz_id):
     academy_user = get_academy_user(request)
     if not academy_user:
         return Response({'error': 'User not found.'}, status=403)
 
-    if academy_user.role not in ['admin', 'super_admin']:
-        return Response({'error': 'Access denied.'}, status=403)
+    quiz     = get_object_or_404(Quizzes, id=quiz_id)
+    attempts = QuizAttempts.objects.filter(
+    user=academy_user, quiz=quiz
+    ).order_by('-created_at')
 
-    # Admin sees only their location, super admin sees all
-    if academy_user.role == 'super_admin':
-        users = Users.objects.filter(status='active')
-    else:
-        users = Users.objects.filter(
-            location=academy_user.location,
-            status='active'
-        )
+    # Only count fully submitted attempts
+    submitted_attempts = attempts.filter(submitted_at__isnull=False)
+    attempt_count = submitted_attempts.count()
+    locked = bool(
+    quiz.attempt_limit and 
+    attempt_count >= quiz.attempt_limit and
+    not submitted_attempts.filter(passed=True).exists()
+)
 
-    serializer = UserSerializer(users, many=True)
-    return Response(serializer.data, status=200)
+    # Only count submitted attempts toward the limit
+    attempt_count = attempts.filter(submitted_at__isnull=False).count()
+    locked = bool(quiz.attempt_limit and attempt_count >= quiz.attempt_limit and 
+              not attempts.filter(passed=True).exists())
+    last_attempt  = submitted_attempts.first()
+    last_result   = None
 
-
-# ============================================================
-# LIST UNLOCK REQUESTS — Super Admin only
-# ============================================================
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def list_unlock_requests(request):
-    academy_user = get_academy_user(request)
-    if not academy_user:
-        return Response({'error': 'User not found.'}, status=403)
-
-    if academy_user.role != 'super_admin':
-        return Response({'error': 'Access denied.'}, status=403)
-
-    requests = QuizUnlockRequests.objects.filter(status='pending').order_by('-requested_at')
-
-    data = []
-    for req in requests:
-        data.append({
-            'id':           req.id,
-            'user_name':    f"{req.user.first_name} {req.user.last_name}",
-            'quiz_title':   req.quiz.title,
-            'reason':       req.reason,
-            'requested_at': req.requested_at,
-            'status':       req.status,
-        })
-
-    return Response(data, status=200)
-
-
-# ============================================================
-# REPORTS
-# ============================================================
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def report_completion(request):
-    academy_user = get_academy_user(request)
-    if not academy_user:
-        return Response({'error': 'User not found.'}, status=403)
-
-    if academy_user.role not in ['admin', 'super_admin']:
-        return Response({'error': 'Access denied.'}, status=403)
-
-    courses = Courses.objects.filter(status='published')
-    data = []
-
-    for course in courses:
-        total      = Enrolments.objects.filter(course=course).count()
-        completed  = Enrolments.objects.filter(course=course, status='completed').count()
-        in_progress = Enrolments.objects.filter(course=course, status='in_progress').count()
-        not_started = Enrolments.objects.filter(course=course, status='not_started').count()
-
-        data.append({
-            'course_id':    course.id,
-            'course_title': course.title,
-            'total':        total,
-            'completed':    completed,
-            'in_progress':  in_progress,
-            'not_started':  not_started,
-            'completion_rate': round((completed / total * 100), 1) if total > 0 else 0,
-        })
-
-    return Response(data, status=200)
-
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def report_staff(request):
-    academy_user = get_academy_user(request)
-    if not academy_user:
-        return Response({'error': 'User not found.'}, status=403)
-
-    if academy_user.role not in ['admin', 'super_admin']:
-        return Response({'error': 'Access denied.'}, status=403)
-
-    if academy_user.role == 'super_admin':
-        users = Users.objects.filter(role='educator', status='active')
-    else:
-        users = Users.objects.filter(
-            role='educator',
-            status='active',
-            location=academy_user.location
-        )
-
-    data = []
-    for user in users:
-        enrolments  = Enrolments.objects.filter(user=user)
-        completed   = enrolments.filter(status='completed').count()
-        in_progress = enrolments.filter(status='in_progress').count()
-        not_started = enrolments.filter(status='not_started').count()
-
-        data.append({
-            'user_id':      user.id,
-            'name':         f"{user.first_name} {user.last_name}",
-            'email':        user.email,
-            'location':     user.location.name if user.location else '—',
-            'completed':    completed,
-            'in_progress':  in_progress,
-            'not_started':  not_started,
-            'total':        enrolments.count(),
-        })
-
-    return Response(data, status=200)
-
-
-# ============================================================
-# LESSON PROGRESS FOR A COURSE
-# ============================================================
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def course_progress(request, course_id):
-    academy_user = get_academy_user(request)
-    if not academy_user:
-        return Response({'error': 'User not found.'}, status=403)
-
-    course  = get_object_or_404(Courses, id=course_id)
-    modules = CourseModules.objects.filter(course=course)
-
-    total_lessons     = 0
-    completed_lessons = 0
-
-    for module in modules:
-        lessons = Lessons.objects.filter(module=module)
-        for lesson in lessons:
-            total_lessons += 1
-            progress = LessonProgress.objects.filter(
-                user=academy_user,
-                lesson=lesson,
-                status='completed'
-            ).exists()
-            if progress:
-                completed_lessons += 1
-
-    percent = round((completed_lessons / total_lessons) * 100) if total_lessons > 0 else 0
+    if last_attempt and last_attempt.submitted_at:
+        last_result = {
+            'score_percent':  last_attempt.score_percent,
+            'passed':         last_attempt.passed,
+            'grading_status': last_attempt.grading_status,
+            'submitted_at':   last_attempt.submitted_at,
+        }
 
     return Response({
-        'course_id':          course_id,
-        'total_lessons':      total_lessons,
-        'completed_lessons':  completed_lessons,
-        'percent':            percent,
+        'attempt_count': attempt_count,
+        'attempt_limit': quiz.attempt_limit,
+        'locked':        locked,
+        'last_result':   last_result,
+        'attempts_left': max(0, (quiz.attempt_limit or 0) - attempt_count),
     }, status=200)
+
+
+
+
+# ============================================================
+# NOTIFICATIONS
+# ============================================================
+# @api_view(['GET'])
+# @permission_classes([IsAuthenticated])
+# def my_notifications(request):
+#     academy_user = get_academy_user(request)
+#     if not academy_user:
+#         return Response({'error': 'User not found.'}, status=403)
+
+#     notifications = Notifications.objects.filter(
+#         recipient=academy_user
+#     ).order_by('-created_at')[:50]
+
+#     data = [{
+#         'id':         n.id,
+#         'type':       n.notif_type,
+#         'title':      n.title,
+#         'message':    n.message,
+#         'is_read':    n.is_read,
+#         'created_at': n.created_at,
+#     } for n in notifications]
+
+#     unread_count = Notifications.objects.filter(
+#         recipient=academy_user, is_read=False
+#     ).count()
+
+#     return Response({'notifications': data, 'unread_count': unread_count}, status=200)
+
+
+# @api_view(['PATCH'])
+# @permission_classes([IsAuthenticated])
+# def mark_notifications_read(request):
+#     academy_user = get_academy_user(request)
+#     if not academy_user:
+#         return Response({'error': 'User not found.'}, status=403)
+
+#     notification_ids = request.data.get('ids', [])
+#     if notification_ids:
+#         Notifications.objects.filter(
+#             recipient=academy_user, id__in=notification_ids
+#         ).update(is_read=True)
+#     else:
+#         Notifications.objects.filter(recipient=academy_user).update(is_read=True)
+
+#     return Response({'message': 'Notifications marked as read.'}, status=200)

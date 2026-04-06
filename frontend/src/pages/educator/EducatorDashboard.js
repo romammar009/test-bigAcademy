@@ -5,6 +5,7 @@ import MyLearning from './MyLearning';
 import MyCertificates from './MyCertificates';
 import API from '../../api/axios';
 import { useNavigate } from 'react-router-dom';
+import NotificationBell from '../../components/NotificationBell';
 
 export default function EducatorDashboard() {
   const { user, logout } = useAuth();
@@ -28,6 +29,7 @@ export default function EducatorDashboard() {
           <span className="text-white">
             {user.first_name} {user.last_name}
           </span>
+          <NotificationBell />
           <button className="btn btn-outline-light btn-sm" onClick={handleLogout}>
             Logout
           </button>

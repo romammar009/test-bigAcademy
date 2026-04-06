@@ -1,16 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import API from '../../api/axios';
+import CourseViewer from './CourseViewer';
 
 export default function MyLearning() {
-  const [enrolments, setEnrolments] = useState([]);
-  const [progress, setProgress]     = useState({});
-  const [loading, setLoading]       = useState(true);
+  const [enrolments, setEnrolments]     = useState([]);
+  const [progress, setProgress]         = useState({});
+  const [loading, setLoading]           = useState(true);
+  const [activeEnrolment, setActive]    = useState(null);
 
   useEffect(() => {
+    fetchEnrolments();
+  }, []);
+
+  const fetchEnrolments = () => {
     API.get('/my-learning/')
       .then(res => {
         setEnrolments(res.data);
-        // Fetch progress for each enrolled course
         res.data.forEach(enrolment => {
           if (enrolment.status === 'completed') {
             setProgress(prev => ({ ...prev, [enrolment.course.id]: 100 }));
@@ -28,7 +33,7 @@ export default function MyLearning() {
       })
       .catch(err => console.error(err))
       .finally(() => setLoading(false));
-  }, []);
+  };
 
   const statusBadge = (status) => {
     if (status === 'completed')   return <span className="badge bg-success">Completed</span>;
@@ -36,13 +41,26 @@ export default function MyLearning() {
     return <span className="badge bg-secondary">Not Started</span>;
   };
 
+  // Open course viewer
+  if (activeEnrolment) {
+    return (
+      <CourseViewer
+        enrolment={activeEnrolment}
+        onBack={() => {
+          setActive(null);
+          fetchEnrolments(); // Refresh progress when coming back
+        }}
+      />
+    );
+  }
+
   if (loading) return <p>Loading...</p>;
 
   return (
     <div>
       <h4 className="mb-3">My Learning</h4>
       {enrolments.length === 0 && (
-        <p className="text-muted">No enrolments yet.</p>
+        <p className="text-muted">No enrolments yet. Check Assigned Courses to get started!</p>
       )}
       <div className="row">
         {enrolments.map(enrolment => {
@@ -83,11 +101,12 @@ export default function MyLearning() {
                   )}
                 </div>
                 <div className="card-footer bg-white">
-                  <small className="text-muted">
-                    v{enrolment.course.version}
-                    {enrolment.course.expiry_months &&
-                      ` · Expires in ${enrolment.course.expiry_months} months`}
-                  </small>
+                  <button
+                    className="btn btn-primary btn-sm w-100"
+                    onClick={() => setActive(enrolment)}
+                  >
+                    {enrolment.status === 'completed' ? '📄 Review Course' : '▶ Continue Learning'}
+                  </button>
                 </div>
               </div>
             </div>

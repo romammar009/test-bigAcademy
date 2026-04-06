@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import API from '../../api/axios';
 
-export default function ManageUsers() {
+export default function HRManageUsers({ isTier2 }) {
   const [users, setUsers]       = useState([]);
   const [loading, setLoading]   = useState(true);
   const [message, setMessage]   = useState('');
@@ -11,9 +11,7 @@ export default function ManageUsers() {
     role: 'educator', phone_number: '', password: ''
   });
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  useEffect(() => { fetchUsers(); }, []);
 
   const fetchUsers = () => {
     API.get('/users/')
@@ -47,9 +45,14 @@ export default function ManageUsers() {
   };
 
   const roleBadge = (role) => {
-    if (role === 'super_admin') return <span className="badge bg-danger">Super Admin</span>;
-    if (role === 'admin')       return <span className="badge bg-primary">Admin</span>;
-    return <span className="badge bg-success">Educator</span>;
+    const badges = {
+      'hr_tier1':   <span className="badge bg-danger">HR Team</span>,
+      'hr_tier2':   <span className="badge bg-dark">HR Head</span>,
+      'super_admin': <span className="badge bg-warning text-dark">Area Manager</span>,
+      'admin':      <span className="badge bg-primary">Branch Manager</span>,
+      'educator':   <span className="badge bg-success">Educator</span>,
+    };
+    return badges[role] || <span className="badge bg-secondary">{role}</span>;
   };
 
   if (loading) return <p>Loading users...</p>;
@@ -58,18 +61,24 @@ export default function ManageUsers() {
     <div>
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h4>Users</h4>
-        <button
-          className="btn btn-danger btn-sm"
-          onClick={() => setShowForm(!showForm)}
-        >
-          {showForm ? 'Cancel' : '+ Onboard User'}
-        </button>
+        {/* Tier 2 (HR Head) can only view, not onboard */}
+        {!isTier2 && (
+          <button
+            className="btn btn-danger btn-sm"
+            onClick={() => setShowForm(!showForm)}
+          >
+            {showForm ? 'Cancel' : '+ Onboard User'}
+          </button>
+        )}
+        {isTier2 && (
+          <span className="badge bg-secondary">View only — contact HR Team to onboard</span>
+        )}
       </div>
 
       {message && <div className="alert alert-info py-2">{message}</div>}
 
-      {/* Register Form */}
-      {showForm && (
+      {/* Register Form — Tier 1 only */}
+      {showForm && !isTier2 && (
         <div className="card shadow-sm mb-4">
           <div className="card-body">
             <h5>Onboard New User</h5>
@@ -97,8 +106,10 @@ export default function ManageUsers() {
                   <select className="form-select" value={form.role}
                     onChange={e => setForm({ ...form, role: e.target.value })}>
                     <option value="educator">Educator</option>
-                    <option value="admin">Admin</option>
-                    <option value="super_admin">Super Admin</option>
+                    <option value="admin">Branch Manager</option>
+                    <option value="super_admin">Area Manager</option>
+                    <option value="hr_tier1">HR Team</option>
+                    <option value="hr_tier2">HR Head / Owner</option>
                   </select>
                 </div>
                 <div className="col-md-6 mb-3">
@@ -130,25 +141,38 @@ export default function ManageUsers() {
               <th>Role</th>
               <th>Location</th>
               <th>Last Login</th>
-              <th>Actions</th>
+              <th>Status</th>
+              {!isTier2 && <th>Actions</th>}
             </tr>
           </thead>
           <tbody>
             {users.map(u => (
               <tr key={u.id}>
-                <td className="fw-semibold">{u.first_name} {u.last_name}</td>
+                <td className="fw-semibold">
+                  {u.first_name} {u.last_name}
+                  {u.has_locked_quiz && (
+                    <span className="ms-2" title="Has locked quiz attempts">⚠️</span>
+                  )}
+                </td>
                 <td>{u.email}</td>
                 <td>{roleBadge(u.role)}</td>
                 <td>{u.location ? u.location.name : '—'}</td>
                 <td>{u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}</td>
                 <td>
-                  <button
-                    className="btn btn-outline-danger btn-sm"
-                    onClick={() => handleOffboard(u)}
-                  >
-                    Offboard
-                  </button>
+                  <span className={`badge ${u.status === 'active' ? 'bg-success' : 'bg-secondary'}`}>
+                    {u.status}
+                  </span>
                 </td>
+                {!isTier2 && (
+                  <td>
+                    <button
+                      className="btn btn-outline-danger btn-sm"
+                      onClick={() => handleOffboard(u)}
+                    >
+                      Offboard
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

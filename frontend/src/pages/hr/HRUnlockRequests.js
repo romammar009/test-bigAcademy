@@ -1,14 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import API from '../../api/axios';
 
-export default function UnlockRequests() {
+export default function HRUnlockRequests() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [message, setMessage]   = useState('');
 
-  useEffect(() => {
-    fetchRequests();
-  }, []);
+  useEffect(() => { fetchRequests(); }, []);
 
   const fetchRequests = () => {
     API.get('/unlock-requests/')
@@ -19,7 +17,7 @@ export default function UnlockRequests() {
 
   const handleReview = async (requestId, status) => {
     const review_note = status === 'approved'
-      ? 'Approved by Super Admin.'
+      ? 'Approved by HR.'
       : prompt('Enter reason for denial:');
 
     if (status === 'denied' && !review_note) return;

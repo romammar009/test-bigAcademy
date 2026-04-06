@@ -1,6 +1,16 @@
 import React, { createContext, useState, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const AuthContext = createContext();
+
+// Role → dashboard path mapping
+const ROLE_REDIRECTS = {
+  'educator':   '/educator',
+  'admin':      '/admin',
+  'super_admin': '/superadmin',
+  'hr_tier1':   '/hr',
+  'hr_tier2':   '/hr',
+};
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
@@ -20,8 +30,12 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const getRedirectPath = (role) => {
+    return ROLE_REDIRECTS[role] || '/login';
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, getRedirectPath }}>
       {children}
     </AuthContext.Provider>
   );

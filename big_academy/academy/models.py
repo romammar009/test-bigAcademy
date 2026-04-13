@@ -22,11 +22,10 @@ class Locations(models.Model):
 class Users(models.Model):
 
     ROLE_CHOICES = [
-        ('hr_tier1',    'HR Team'),           # Was: super_admin — full HR access
-        ('hr_tier2',    'HR Head / Owner'),    # New — senior HR, read-only + request updates
-        ('super_admin', 'Super Admin'),        # New — Area Manager, multi-location access
-        ('admin',       'Admin'),              # Branch Manager — single location
-        ('educator',    'Educator'),           # Staff member
+        ('hr',              'HR'),              # Full access, can manage users
+        ('area_manager',    'Area Manager'),    # Create/submit courses for HR approval
+        ('branch_manager',  'Branch Manager'),  # View only
+        ('educator',        'Educator'),        # View only
     ]
 
     STATUS_CHOICES = [
@@ -35,18 +34,19 @@ class Users(models.Model):
         ('terminated',  'Terminated'),
     ]
 
-    email         = models.CharField(unique=True, max_length=255)
-    first_name    = models.CharField(max_length=100)
-    last_name     = models.CharField(max_length=100)
-    role          = models.CharField(max_length=20, choices=ROLE_CHOICES, default='educator')
-    location      = models.ForeignKey(Locations, models.DO_NOTHING, blank=True, null=True)
-    status        = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
-    password_hash = models.TextField(blank=True, null=True)
-    created_at    = models.DateTimeField(blank=True, null=True)
-    updated_at    = models.DateTimeField(blank=True, null=True)
-    last_login_at = models.DateTimeField(blank=True, null=True)
-    phone_number  = models.CharField(max_length=20, blank=True, null=True)
-    employee_id   = models.CharField(max_length=20, blank=True, null=True)
+    email            = models.CharField(unique=True, max_length=255)
+    first_name       = models.CharField(max_length=100)
+    last_name        = models.CharField(max_length=100)
+    role             = models.CharField(max_length=20, choices=ROLE_CHOICES, default='educator')
+    is_hr_executive  = models.BooleanField(default=False)
+    location         = models.ForeignKey(Locations, models.DO_NOTHING, blank=True, null=True)
+    status           = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    password_hash    = models.TextField(blank=True, null=True)
+    created_at       = models.DateTimeField(blank=True, null=True)
+    updated_at       = models.DateTimeField(blank=True, null=True)
+    last_login_at    = models.DateTimeField(blank=True, null=True)
+    phone_number     = models.CharField(max_length=20, blank=True, null=True)
+    employee_id      = models.CharField(max_length=20, blank=True, null=True)
 
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.role})"
@@ -58,13 +58,12 @@ class Users(models.Model):
         verbose_name_plural = 'Users'
 
 
-# ── Location assignments for Super Admin (Area Manager) ──────────────
-# Allows a super_admin to be assigned to multiple locations
+# ── Location assignments for Area Manager ──────────────────────────────
 class SuperAdminLocations(models.Model):
     user     = models.ForeignKey(
         Users, models.DO_NOTHING,
         related_name='assigned_locations',
-        limit_choices_to={'role': 'super_admin'}
+        limit_choices_to={'role': 'area_manager'}
     )
     location = models.ForeignKey(Locations, models.DO_NOTHING)
     assigned_at = models.DateTimeField(auto_now_add=True)
@@ -73,11 +72,11 @@ class SuperAdminLocations(models.Model):
         return f"{self.user} → {self.location}"
 
     class Meta:
-        managed = True   # Django will create this table
+        managed = True
         db_table = 'super_admin_locations'
         unique_together = (('user', 'location'),)
-        verbose_name = 'Super Admin Location'
-        verbose_name_plural = 'Super Admin Locations'
+        verbose_name = 'Area Manager Location'
+        verbose_name_plural = 'Area Manager Locations'
 
 
 class Courses(models.Model):
@@ -240,7 +239,7 @@ class QuizQuestions(models.Model):
 
 
 class QuizOptions(models.Model):
-    question   = models.ForeignKey(QuizQuestions, models.DO_NOTHING)
+    question    = models.ForeignKey(QuizQuestions, models.DO_NOTHING)
     option_text = models.TextField()
     is_correct  = models.BooleanField()
     sort_order  = models.IntegerField()
@@ -264,8 +263,7 @@ class QuizAttempts(models.Model):
     started_at          = models.DateTimeField(blank=True, null=True)
     submitted_at        = models.DateTimeField(blank=True, null=True)
     created_at          = models.DateTimeField()
-    # Short answer grading fields
-    short_answer_score  = models.SmallIntegerField(blank=True, null=True)  # set by admin
+    short_answer_score  = models.SmallIntegerField(blank=True, null=True)
     graded_by           = models.ForeignKey(
         Users, models.DO_NOTHING,
         null=True, blank=True,
@@ -278,7 +276,6 @@ class QuizAttempts(models.Model):
         choices=[('pending', 'Pending'), ('graded', 'Graded')],
         default='pending'
     )
-    # Staff declaration
     declaration_signed  = models.BooleanField(default=False)
     declaration_name    = models.CharField(max_length=200, blank=True, null=True)
 
@@ -294,11 +291,11 @@ class QuizAttempts(models.Model):
 
 
 class QuizAnswers(models.Model):
-    attempt         = models.ForeignKey(QuizAttempts, models.DO_NOTHING)
-    question        = models.ForeignKey(QuizQuestions, models.DO_NOTHING)
-    selected_option = models.ForeignKey(QuizOptions, models.DO_NOTHING, blank=True, null=True)
-    short_answer_text = models.TextField(blank=True, null=True)   # for short_answer questions
-    is_correct      = models.BooleanField(default=False)
+    attempt           = models.ForeignKey(QuizAttempts, models.DO_NOTHING)
+    question          = models.ForeignKey(QuizQuestions, models.DO_NOTHING)
+    selected_option   = models.ForeignKey(QuizOptions, models.DO_NOTHING, blank=True, null=True)
+    short_answer_text = models.TextField(blank=True, null=True)
+    is_correct        = models.BooleanField(default=False)
 
     def __str__(self):
         correct = 'Correct' if self.is_correct else 'Wrong'
@@ -312,14 +309,14 @@ class QuizAnswers(models.Model):
 
 
 class Certificates(models.Model):
-    certificate_id    = models.UUIDField(unique=True)
-    user              = models.ForeignKey(Users, models.DO_NOTHING)
-    course            = models.ForeignKey(Courses, models.DO_NOTHING)
-    course_version    = models.CharField(max_length=20)
-    issued_at         = models.DateTimeField()
-    file_storage_key  = models.TextField(blank=True, null=True)
-    created_at        = models.DateTimeField()
-    expires_at        = models.DateTimeField(blank=True, null=True)
+    certificate_id   = models.UUIDField(unique=True)
+    user             = models.ForeignKey(Users, models.DO_NOTHING)
+    course           = models.ForeignKey(Courses, models.DO_NOTHING)
+    course_version   = models.CharField(max_length=20)
+    issued_at        = models.DateTimeField()
+    file_storage_key = models.TextField(blank=True, null=True)
+    created_at       = models.DateTimeField()
+    expires_at       = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
         return f"{self.user} — {self.course} (issued: {self.issued_at.strftime('%d %b %Y')})"
@@ -361,30 +358,29 @@ class QuizUnlockRequests(models.Model):
         verbose_name_plural = 'Quiz Unlock Requests'
 
 
-# ── Notifications ─────────────────────────────────────────────────────
 class Notifications(models.Model):
 
     TYPE_CHOICES = [
-        ('certificate_issued',   'Certificate Issued'),
-        ('quiz_locked',          'Quiz Locked'),
-        ('unlock_approved',      'Unlock Approved'),
-        ('unlock_denied',        'Unlock Denied'),
-        ('short_answer_graded',  'Short Answer Graded'),
-        ('general',              'General'),
+        ('certificate_issued',  'Certificate Issued'),
+        ('quiz_locked',         'Quiz Locked'),
+        ('unlock_approved',     'Unlock Approved'),
+        ('unlock_denied',       'Unlock Denied'),
+        ('short_answer_graded', 'Short Answer Graded'),
+        ('general',             'General'),
     ]
 
-    recipient    = models.ForeignKey(Users, models.DO_NOTHING, related_name='notifications')
-    notif_type   = models.CharField(max_length=30, choices=TYPE_CHOICES, default='general')
-    title        = models.CharField(max_length=255)
-    message      = models.TextField()
-    is_read      = models.BooleanField(default=False)
-    created_at   = models.DateTimeField(auto_now_add=True)
+    recipient  = models.ForeignKey(Users, models.DO_NOTHING, related_name='notifications')
+    notif_type = models.CharField(max_length=30, choices=TYPE_CHOICES, default='general')
+    title      = models.CharField(max_length=255)
+    message    = models.TextField()
+    is_read    = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.recipient} — {self.notif_type} ({'read' if self.is_read else 'unread'})"
 
     class Meta:
-        managed = True   # Django will create this table
+        managed = True
         db_table = 'notifications'
         verbose_name = 'Notification'
         verbose_name_plural = 'Notifications'

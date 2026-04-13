@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import API from '../api/axios';
+import { Bell } from 'lucide-react';
 
 export default function NotificationBell() {
   const [notifications, setNotifications] = useState([]);
@@ -52,56 +53,164 @@ export default function NotificationBell() {
     return `${Math.floor(diff / 1440)}d ago`;
   };
 
+  const S = {
+    bellBtn: {
+      position: 'relative',
+      background: '#f8fafc',
+      border: '1px solid #e2e8f0',
+      borderRadius: '8px',
+      width: '36px',
+      height: '36px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      cursor: 'pointer',
+      color: '#64748b',
+      transition: 'all 0.15s ease',
+    },
+    badge: {
+      position: 'absolute',
+      top: '-4px',
+      right: '-4px',
+      background: '#ef4444',
+      color: '#fff',
+      fontSize: '0.6rem',
+      fontWeight: '700',
+      borderRadius: '10px',
+      padding: '1px 5px',
+      minWidth: '16px',
+      textAlign: 'center',
+      lineHeight: '14px',
+      border: '2px solid #fff',
+    },
+    dropdown: {
+      position: 'absolute',
+      right: 0,
+      top: 'calc(100% + 8px)',
+      width: '340px',
+      background: '#fff',
+      borderRadius: '12px',
+      boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+      border: '1px solid #e2e8f0',
+      zIndex: 1050,
+      overflow: 'hidden',
+    },
+    dropdownHeader: {
+      padding: '14px 16px',
+      borderBottom: '1px solid #f1f5f9',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    dropdownTitle: {
+      fontWeight: '700',
+      fontSize: '0.9rem',
+      color: '#0f172a',
+    },
+    dropdownCount: {
+      fontSize: '0.75rem',
+      color: '#94a3b8',
+      background: '#f1f5f9',
+      padding: '2px 8px',
+      borderRadius: '10px',
+    },
+    notifList: {
+      maxHeight: '360px',
+      overflowY: 'auto',
+    },
+    notifItem: (isUnread) => ({
+      padding: '12px 16px',
+      borderBottom: '1px solid #f8fafc',
+      background: isUnread ? '#f0f6ff' : '#fff',
+      cursor: 'default',
+      transition: 'background 0.1s',
+    }),
+    notifTop: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: '3px',
+      gap: '8px',
+    },
+    notifTitle: {
+      fontSize: '0.85rem',
+      fontWeight: '600',
+      color: '#1e293b',
+    },
+    notifTime: {
+      fontSize: '0.72rem',
+      color: '#94a3b8',
+      whiteSpace: 'nowrap',
+      flexShrink: 0,
+    },
+    notifMessage: {
+      fontSize: '0.8rem',
+      color: '#64748b',
+      lineHeight: 1.4,
+    },
+    unreadDot: {
+      width: '6px',
+      height: '6px',
+      borderRadius: '50%',
+      background: '#2563eb',
+      flexShrink: 0,
+      marginTop: '4px',
+    },
+    emptyState: {
+      padding: '32px 16px',
+      textAlign: 'center',
+      color: '#94a3b8',
+    },
+    emptyIcon: {
+      marginBottom: '8px',
+      opacity: 0.4,
+    },
+    emptyText: {
+      fontSize: '0.85rem',
+    },
+  };
+
   return (
-    <div className="position-relative" ref={dropdownRef}>
-      <button
-        className="btn btn-outline-light btn-sm position-relative"
-        onClick={handleOpen}
-        title="Notifications"
-      >
-        🔔
+    <div style={{ position: 'relative' }} ref={dropdownRef}>
+      <button style={S.bellBtn} onClick={handleOpen} title="Notifications">
+        <Bell size={16} />
         {unreadCount > 0 && (
-          <span
-            className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-            style={{ fontSize: '0.65rem' }}
-          >
+          <span style={S.badge}>
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div
-          className="position-absolute end-0 mt-2 bg-white border rounded shadow"
-          style={{ width: '340px', zIndex: 1050, maxHeight: '400px', overflowY: 'auto' }}
-        >
-          <div className="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
-            <strong className="text-dark">Notifications</strong>
-            <small className="text-muted">{notifications.length} total</small>
+        <div style={S.dropdown}>
+          <div style={S.dropdownHeader}>
+            <span style={S.dropdownTitle}>Notifications</span>
+            <span style={S.dropdownCount}>{notifications.length} total</span>
           </div>
 
-          {notifications.length === 0 ? (
-            <div className="p-3 text-center text-muted">
-              <div style={{ fontSize: '2rem' }}>🔔</div>
-              <div>No notifications yet</div>
-            </div>
-          ) : (
-            notifications.map(n => (
-              <div
-                key={n.id}
-                className={`px-3 py-2 border-bottom ${!n.is_read ? 'bg-light' : ''}`}
-                style={{ cursor: 'default' }}
-              >
-                <div className="d-flex justify-content-between align-items-start">
-                  <strong className="text-dark" style={{ fontSize: '0.9rem' }}>{n.title}</strong>
-                  <small className="text-muted ms-2" style={{ whiteSpace: 'nowrap' }}>
-                    {formatTime(n.created_at)}
-                  </small>
+          <div style={S.notifList}>
+            {notifications.length === 0 ? (
+              <div style={S.emptyState}>
+                <div style={S.emptyIcon}>
+                  <Bell size={32} color="#94a3b8" />
                 </div>
-                <div className="text-secondary" style={{ fontSize: '0.85rem' }}>{n.message}</div>
+                <div style={S.emptyText}>No notifications yet</div>
               </div>
-            ))
-          )}
+            ) : (
+              notifications.map(n => (
+                <div key={n.id} style={S.notifItem(!n.is_read)}>
+                  <div style={S.notifTop}>
+                    <span style={S.notifTitle}>{n.title}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {!n.is_read && <div style={S.unreadDot} />}
+                      <span style={S.notifTime}>{formatTime(n.created_at)}</span>
+                    </div>
+                  </div>
+                  <div style={S.notifMessage}>{n.message}</div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
     </div>

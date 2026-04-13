@@ -4,11 +4,18 @@ import { useAuth } from '../../context/AuthContext';
 import API from '../../api/axios';
 
 const QUICK_LOGINS = [
-  { label: 'HR',           email: 'sarah.admin@bigchildcare.com.au',  password: 'Test1234!', color: 'danger' },
-  { label: 'Admin',        email: 'priya.manager@bigchildcare.com.au', password: 'Test1234!', color: 'primary' },
-  { label: 'Area Manager', email: 'alex.areamanager@bigchildcare.com.au', password: 'Test1234!', color: 'warning' },
-  { label: 'Educator',     email: 'amy.educator@bigchildcare.com.au',  password: 'Test1234!', color: 'success' },
-  { label: 'Educator 2',   email: 'jake.morris@bigchildcare.com.au',   password: 'Test1234!', color: 'success' },
+  { label: 'Billy (HR Exec)',  email: 'billy.hr@bigchildcare.com.au',             password: 'Test1234!', color: 'danger' },
+  { label: 'Rob (HR)',         email: 'rob.hr@bigchildcare.com.au',               password: 'Test1234!', color: 'danger' },
+  { label: 'Sean (HR)',        email: 'sean.hr@bigchildcare.com.au',              password: 'Test1234!', color: 'danger' },
+  { label: 'Alex (Area Mgr)',  email: 'alex.areamanager@bigchildcare.com.au',     password: 'Test1234!', color: 'warning' },
+  { label: 'Emma (Area Mgr)',  email: 'emma.areamanager@bigchildcare.com.au',     password: 'Test1234!', color: 'warning' },
+  { label: 'David (Area Mgr)', email: 'david.areamanager@bigchildcare.com.au',    password: 'Test1234!', color: 'warning' },
+  { label: 'Priya (Branch)',   email: 'priya.manager@bigchildcare.com.au',        password: 'Test1234!', color: 'primary' },
+  { label: 'Tom (Branch)',     email: 'tom.manager@bigchildcare.com.au',          password: 'Test1234!', color: 'primary' },
+  { label: 'Lisa (Branch)',    email: 'lisa.manager@bigchildcare.com.au',         password: 'Test1234!', color: 'primary' },
+  { label: 'Amy (Educator)',   email: 'amy.educator@bigchildcare.com.au',         password: 'Test1234!', color: 'success' },
+  { label: 'Jake (Educator)',  email: 'jake.educator@bigchildcare.com.au',        password: 'Test1234!', color: 'success' },
+  { label: 'Ben (Educator)',   email: 'ben.educator@bigchildcare.com.au',         password: 'Test1234!', color: 'success' },
 ];
 
 export default function Login() {
@@ -42,7 +49,7 @@ export default function Login() {
 
   return (
     <div className="min-vh-100 d-flex align-items-center justify-content-center bg-light">
-      <div className="card shadow p-4" style={{ width: '100%', maxWidth: '420px' }}>
+      <div className="card shadow p-4" style={{ width: '100%', maxWidth: '480px' }}>
 
         <div className="text-center mb-4">
           <h2 className="fw-bold text-success">Big Academy</h2>

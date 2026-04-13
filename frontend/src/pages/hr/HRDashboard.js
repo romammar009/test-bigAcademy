@@ -18,17 +18,17 @@ export default function HRDashboard() {
     navigate('/login');
   };
 
-  const isTier2 = user.role === 'hr_tier2';
+  const isExecutive = user.is_hr_executive;
 
   return (
     <div>
       <nav className="navbar navbar-expand-lg navbar-dark bg-danger px-4">
         <span className="navbar-brand fw-bold">
-          Big Academy — {isTier2 ? 'HR Head / Owner' : 'HR Team'}
+          Big Academy — {isExecutive ? 'HR Executive' : 'HR'}
         </span>
         <div className="ms-auto d-flex align-items-center gap-3">
           <span className="badge bg-light text-danger">
-            {isTier2 ? 'HR Tier 2' : 'HR Tier 1'}
+            {isExecutive ? 'HR Executive' : 'HR'}
           </span>
           <span className="text-white">
             {user.first_name} {user.last_name}
@@ -68,7 +68,7 @@ export default function HRDashboard() {
           </li>
         </ul>
 
-        {activeTab === 'users'    && <HRManageUsers isTier2={isTier2} />}
+        {activeTab === 'users'    && <HRManageUsers isExecutive={isExecutive} />}
         {activeTab === 'requests' && <HRUnlockRequests />}
         {activeTab === 'reports'  && <HRReports />}
       </div>

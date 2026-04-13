@@ -20,8 +20,8 @@ class UserSerializer(serializers.ModelSerializer):
         model = Users
         fields = [
             'id', 'email', 'first_name', 'last_name',
-            'role', 'status', 'location', 'phone_number',
-            'created_at', 'last_login_at'
+            'role', 'is_hr_executive', 'status', 'location',
+            'phone_number', 'created_at', 'last_login_at'
         ]
 
 
@@ -84,14 +84,13 @@ class CourseModuleSerializer(serializers.ModelSerializer):
         fields = ['id', 'title', 'sort_order', 'lessons', 'quizzes']
 
     def get_lessons(self, module):
-        # Exclude quiz-type lessons
         lessons = Lessons.objects.filter(
             module=module
         ).exclude(content_type='quiz').order_by('sort_order')
         return LessonSerializer(lessons, many=True).data
 
     def get_quizzes(self, module):
-        course = module.course
+        course      = module.course
         all_modules = list(CourseModules.objects.filter(
             course=course
         ).order_by('sort_order'))

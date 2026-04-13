@@ -32,13 +32,15 @@ export default function AdminDashboard() {
     navigate('/login');
   };
 
+  const roleLabel = user.role === 'branch_manager' ? 'Branch Manager' : 'Admin';
+
   return (
     <div>
       <nav className="navbar navbar-expand-lg navbar-dark bg-primary px-4">
-        <span className="navbar-brand fw-bold">Big Academy — Admin</span>
+        <span className="navbar-brand fw-bold">Big Academy — {roleLabel}</span>
         <div className="ms-auto d-flex align-items-center gap-3">
           <span className="text-white">{user.first_name} {user.last_name}</span>
-          <span className="badge bg-light text-primary">{user.location}</span>
+          <span className="badge bg-light text-primary">{roleLabel}</span>
           <NotificationBell />
           <button className="btn btn-outline-light btn-sm" onClick={handleLogout}>Logout</button>
         </div>

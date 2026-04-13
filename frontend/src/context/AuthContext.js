@@ -1,15 +1,13 @@
 import React, { createContext, useState, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 const AuthContext = createContext();
 
 // Role → dashboard path mapping
 const ROLE_REDIRECTS = {
-  'educator':   '/educator',
-  'admin':      '/admin',
-  'super_admin': '/superadmin',
-  'hr_tier1':   '/hr',
-  'hr_tier2':   '/hr',
+  'educator':       '/educator',
+  'branch_manager': '/branch-manager',
+  'area_manager':   '/area-manager',
+  'hr':             '/hr',
 };
 
 export function AuthProvider({ children }) {

@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import API from '../../api/axios';
+import { useAuth } from '../../context/AuthContext';
 
-export default function HRManageUsers({ isTier2 }) {
+export default function HRManageUsers({ isExecutive }) {
+  const { user: currentUser } = useAuth();
   const [users, setUsers]       = useState([]);
   const [loading, setLoading]   = useState(true);
   const [message, setMessage]   = useState('');
@@ -33,24 +35,32 @@ export default function HRManageUsers({ isTier2 }) {
     }
   };
 
-  const handleOffboard = async (user) => {
-    if (!window.confirm(`Offboard ${user.first_name} ${user.last_name}?`)) return;
+  const handleOffboard = async (u) => {
+    if (!window.confirm(`Offboard ${u.first_name} ${u.last_name}?`)) return;
     try {
-      await API.patch(`/users/${user.id}/offboard/`, { offboard_type: 'disabled' });
-      setMessage(`${user.first_name} ${user.last_name} has been offboarded.`);
+      await API.patch(`/users/${u.id}/offboard/`, { offboard_type: 'disabled' });
+      setMessage(`${u.first_name} ${u.last_name} has been offboarded.`);
       fetchUsers();
     } catch (err) {
-      setMessage('Could not offboard user.');
+      setMessage(err.response?.data?.error || 'Could not offboard user.');
     }
+  };
+
+  // Can this HR user offboard the target user?
+  const canOffboard = (targetUser) => {
+    // Cannot offboard yourself
+    if (targetUser.email === currentUser.email) return false;
+    // Only executives can offboard other HR users
+    if (targetUser.role === 'hr' && !isExecutive) return false;
+    return true;
   };
 
   const roleBadge = (role) => {
     const badges = {
-      'hr_tier1':   <span className="badge bg-danger">HR Team</span>,
-      'hr_tier2':   <span className="badge bg-dark">HR Head</span>,
-      'super_admin': <span className="badge bg-warning text-dark">Area Manager</span>,
-      'admin':      <span className="badge bg-primary">Branch Manager</span>,
-      'educator':   <span className="badge bg-success">Educator</span>,
+      'hr':             <span className="badge bg-danger">HR</span>,
+      'area_manager':   <span className="badge bg-warning text-dark">Area Manager</span>,
+      'branch_manager': <span className="badge bg-primary">Branch Manager</span>,
+      'educator':       <span className="badge bg-success">Educator</span>,
     };
     return badges[role] || <span className="badge bg-secondary">{role}</span>;
   };
@@ -61,24 +71,18 @@ export default function HRManageUsers({ isTier2 }) {
     <div>
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h4>Users</h4>
-        {/* Tier 2 (HR Head) can only view, not onboard */}
-        {!isTier2 && (
-          <button
-            className="btn btn-danger btn-sm"
-            onClick={() => setShowForm(!showForm)}
-          >
-            {showForm ? 'Cancel' : '+ Onboard User'}
-          </button>
-        )}
-        {isTier2 && (
-          <span className="badge bg-secondary">View only — contact HR Team to onboard</span>
-        )}
+        <button
+          className="btn btn-danger btn-sm"
+          onClick={() => setShowForm(!showForm)}
+        >
+          {showForm ? 'Cancel' : '+ Onboard User'}
+        </button>
       </div>
 
       {message && <div className="alert alert-info py-2">{message}</div>}
 
-      {/* Register Form — Tier 1 only */}
-      {showForm && !isTier2 && (
+      {/* Register Form */}
+      {showForm && (
         <div className="card shadow-sm mb-4">
           <div className="card-body">
             <h5>Onboard New User</h5>
@@ -106,10 +110,9 @@ export default function HRManageUsers({ isTier2 }) {
                   <select className="form-select" value={form.role}
                     onChange={e => setForm({ ...form, role: e.target.value })}>
                     <option value="educator">Educator</option>
-                    <option value="admin">Branch Manager</option>
-                    <option value="super_admin">Area Manager</option>
-                    <option value="hr_tier1">HR Team</option>
-                    <option value="hr_tier2">HR Head / Owner</option>
+                    <option value="branch_manager">Branch Manager</option>
+                    <option value="area_manager">Area Manager</option>
+                    <option value="hr">HR</option>
                   </select>
                 </div>
                 <div className="col-md-6 mb-3">
@@ -142,7 +145,7 @@ export default function HRManageUsers({ isTier2 }) {
               <th>Location</th>
               <th>Last Login</th>
               <th>Status</th>
-              {!isTier2 && <th>Actions</th>}
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -150,8 +153,8 @@ export default function HRManageUsers({ isTier2 }) {
               <tr key={u.id}>
                 <td className="fw-semibold">
                   {u.first_name} {u.last_name}
-                  {u.has_locked_quiz && (
-                    <span className="ms-2" title="Has locked quiz attempts">⚠️</span>
+                  {u.role === 'hr' && u.is_hr_executive && (
+                    <span className="ms-2 badge bg-danger">Executive</span>
                   )}
                 </td>
                 <td>{u.email}</td>
@@ -163,16 +166,18 @@ export default function HRManageUsers({ isTier2 }) {
                     {u.status}
                   </span>
                 </td>
-                {!isTier2 && (
-                  <td>
+                <td>
+                  {canOffboard(u) ? (
                     <button
                       className="btn btn-outline-danger btn-sm"
                       onClick={() => handleOffboard(u)}
                     >
                       Offboard
                     </button>
-                  </td>
-                )}
+                  ) : (
+                    <span className="text-muted small">—</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

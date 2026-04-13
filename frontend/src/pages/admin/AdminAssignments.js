@@ -4,6 +4,7 @@ import API from '../../api/axios';
 export default function AdminAssignments() {
   const [assignments, setAssignments] = useState([]);
   const [courses, setCourses]         = useState([]);
+  const [staff, setStaff]             = useState([]);
   const [loading, setLoading]         = useState(true);
   const [message, setMessage]         = useState('');
   const [showForm, setShowForm]       = useState(false);
@@ -11,7 +12,7 @@ export default function AdminAssignments() {
   const [form, setForm]               = useState({
     course_id:       '',
     assignment_type: 'all',
-    target_value:    'educator',
+    target_value:    '',
     mandatory:       true,
     due_at:          '',
   });
@@ -22,12 +23,14 @@ export default function AdminAssignments() {
 
   const fetchData = async () => {
     try {
-      const [assignRes, courseRes] = await Promise.all([
+      const [assignRes, courseRes, staffRes] = await Promise.all([
         API.get('/assignments/'),
         API.get('/courses/'),
+        API.get('/users/'),
       ]);
       setAssignments(assignRes.data);
       setCourses(courseRes.data.filter(c => c.status === 'published'));
+      setStaff(staffRes.data.filter(u => u.role === 'educator'));
     } catch (err) {
       console.error(err);
     } finally {
@@ -47,7 +50,7 @@ export default function AdminAssignments() {
       await API.post('/assignments/create/', form);
       showMessage('Course assigned successfully.');
       setShowForm(false);
-      setForm({ course_id: '', assignment_type: 'all', target_value: 'educator', mandatory: true, due_at: '' });
+      setForm({ course_id: '', assignment_type: 'all', target_value: '', mandatory: true, due_at: '' });
       fetchData();
     } catch (err) {
       showMessage(err.response?.data?.error || 'Could not create assignment.');
@@ -68,9 +71,16 @@ export default function AdminAssignments() {
   };
 
   const assignmentLabel = (a) => {
-    if (a.assignment_type === 'all')  return <span className="badge bg-primary">All Staff</span>;
-    if (a.assignment_type === 'role') return <span className="badge bg-info text-dark">{a.target_value}</span>;
-    return <span className="badge bg-secondary">{a.assignment_type}</span>;
+    if (a.assignment_type === 'all') {
+      return <span className="badge bg-primary">All Staff</span>;
+    }
+    if (a.assignment_type === 'user') {
+      const member = staff.find(s => String(s.id) === String(a.target_value));
+      return <span className="badge bg-info text-dark">
+        {member ? `${member.first_name} ${member.last_name}` : `User #${a.target_value}`}
+      </span>;
+    }
+    return <span className="badge bg-secondary">{a.target_value}</span>;
   };
 
   if (loading) return <p>Loading assignments...</p>;
@@ -107,21 +117,22 @@ export default function AdminAssignments() {
                 <div className="col-md-3">
                   <label className="form-label">Assign To</label>
                   <select className="form-select" value={form.assignment_type}
-                    onChange={e => setForm({ ...form, assignment_type: e.target.value })}>
+                    onChange={e => setForm({ ...form, assignment_type: e.target.value, target_value: '' })}>
                     <option value="all">All Staff</option>
-                    <option value="role">By Role</option>
+                    <option value="user">Individual</option>
                   </select>
                 </div>
-                {form.assignment_type === 'role' && (
+                {form.assignment_type === 'user' && (
                   <div className="col-md-3">
-                    <label className="form-label">Role</label>
+                    <label className="form-label">Select Staff Member</label>
                     <select className="form-select" value={form.target_value}
-                      onChange={e => setForm({ ...form, target_value: e.target.value })}>
-                      <option value="educator">Educator</option>
-                      <option value="admin">Admin</option>
-                      <option value="super_admin">Super Admin</option>
-                      <option value="hr_tier1">HR Tier 1</option>
-                      <option value="hr_tier2">HR Tier 2</option>
+                      onChange={e => setForm({ ...form, target_value: e.target.value })} required>
+                      <option value="">Select a person...</option>
+                      {staff.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.first_name} {s.last_name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 )}
@@ -171,7 +182,10 @@ export default function AdminAssignments() {
                 <tr key={a.id}>
                   <td className="fw-semibold">{a.course_title}</td>
                   <td>{assignmentLabel(a)}</td>
-                  <td>{a.mandatory ? <span className="badge bg-danger">Mandatory</span> : <span className="badge bg-secondary">Optional</span>}</td>
+                  <td>{a.mandatory
+                    ? <span className="badge bg-danger">Mandatory</span>
+                    : <span className="badge bg-secondary">Optional</span>}
+                  </td>
                   <td>{a.due_at ? new Date(a.due_at).toLocaleDateString() : '—'}</td>
                   <td>
                     <button className="btn btn-outline-danger btn-sm"

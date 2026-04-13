@@ -1,16 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import API from '../../api/axios';
 import CourseViewer from './CourseViewer';
+import { BookOpen, PlayCircle, FileText, Clock, CheckCircle } from 'lucide-react';
 
 export default function MyLearning() {
-  const [enrolments, setEnrolments]     = useState([]);
-  const [progress, setProgress]         = useState({});
-  const [loading, setLoading]           = useState(true);
-  const [activeEnrolment, setActive]    = useState(null);
+  const [enrolments, setEnrolments]  = useState([]);
+  const [progress, setProgress]      = useState({});
+  const [loading, setLoading]        = useState(true);
+  const [activeEnrolment, setActive] = useState(null);
 
-  useEffect(() => {
-    fetchEnrolments();
-  }, []);
+  useEffect(() => { fetchEnrolments(); }, []);
 
   const fetchEnrolments = () => {
     API.get('/my-learning/')
@@ -35,84 +34,199 @@ export default function MyLearning() {
       .finally(() => setLoading(false));
   };
 
-  const statusBadge = (status) => {
-    if (status === 'completed')   return <span className="badge bg-success">Completed</span>;
-    if (status === 'in_progress') return <span className="badge bg-primary">In Progress</span>;
-    return <span className="badge bg-secondary">Not Started</span>;
-  };
-
-  // Open course viewer
   if (activeEnrolment) {
     return (
       <CourseViewer
         enrolment={activeEnrolment}
         onBack={() => {
           setActive(null);
-          fetchEnrolments(); // Refresh progress when coming back
+          fetchEnrolments();
         }}
       />
     );
   }
 
-  if (loading) return <p>Loading...</p>;
+  if (loading) return <p style={{ color: '#64748b' }}>Loading...</p>;
+
+  const S = {
+    grid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+      gap: '16px',
+    },
+    card: {
+      background: '#fff',
+      borderRadius: '12px',
+      boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+      border: '1px solid #e2e8f0',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+    },
+    cardBody: {
+      padding: '20px',
+      flex: 1,
+    },
+    cardTitle: {
+      fontSize: '1rem',
+      fontWeight: '700',
+      color: '#0f172a',
+      marginBottom: '6px',
+    },
+    cardDesc: {
+      fontSize: '0.8rem',
+      color: '#64748b',
+      lineHeight: 1.5,
+      marginBottom: '14px',
+    },
+    badgeRow: {
+      display: 'flex',
+      gap: '8px',
+      marginBottom: '14px',
+      flexWrap: 'wrap',
+    },
+    badge: (bg, color) => ({
+      fontSize: '0.72rem',
+      fontWeight: '600',
+      padding: '3px 10px',
+      borderRadius: '20px',
+      background: bg,
+      color: color,
+    }),
+    progressWrap: {
+      marginBottom: '12px',
+    },
+    progressBar: {
+      height: '6px',
+      background: '#e2e8f0',
+      borderRadius: '10px',
+      overflow: 'hidden',
+      marginBottom: '4px',
+    },
+    progressFill: (pct) => ({
+      height: '100%',
+      width: `${pct}%`,
+      background: pct === 100 ? '#10b981' : '#2563eb',
+      borderRadius: '10px',
+      transition: 'width 0.3s ease',
+    }),
+    progressText: {
+      fontSize: '0.72rem',
+      color: '#94a3b8',
+      fontWeight: '600',
+      textAlign: 'right',
+    },
+    dateRow: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '2px',
+      marginBottom: '4px',
+    },
+    dateText: {
+      fontSize: '0.75rem',
+      color: '#94a3b8',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '5px',
+    },
+    cardFooter: {
+      padding: '12px 20px',
+      borderTop: '1px solid #f1f5f9',
+      background: '#fafafa',
+    },
+    actionBtn: (isCompleted) => ({
+      width: '100%',
+      padding: '9px',
+      background: isCompleted ? '#f0fdf4' : '#2563eb',
+      color: isCompleted ? '#059669' : '#fff',
+      border: isCompleted ? '1px solid #bbf7d0' : 'none',
+      borderRadius: '8px',
+      fontSize: '0.85rem',
+      fontWeight: '600',
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '7px',
+      transition: 'opacity 0.15s',
+    }),
+    emptyState: {
+      textAlign: 'center',
+      padding: '48px 24px',
+      color: '#94a3b8',
+    },
+  };
+
+  const statusConfig = {
+    completed:   { bg: '#f0fdf4', color: '#059669', label: 'Completed'   },
+    in_progress: { bg: '#eff6ff', color: '#2563eb', label: 'In Progress' },
+    not_started: { bg: '#f8fafc', color: '#64748b', label: 'Not Started' },
+  };
 
   return (
     <div>
-      <h4 className="mb-3">My Learning</h4>
-      {enrolments.length === 0 && (
-        <p className="text-muted">No enrolments yet. Check Assigned Courses to get started!</p>
-      )}
-      <div className="row">
-        {enrolments.map(enrolment => {
-          const pct = progress[enrolment.course.id] ?? 0;
-          return (
-            <div className="col-md-4 mb-4" key={enrolment.id}>
-              <div className="card h-100 shadow-sm">
-                <div className="card-body">
-                  <h5 className="card-title">{enrolment.course.title}</h5>
-                  <p className="text-muted small">{enrolment.course.description}</p>
-                  <div className="mb-3">
-                    {statusBadge(enrolment.status)}
-                    <span className="badge bg-light text-dark ms-2">
-                      {enrolment.source}
-                    </span>
+      {enrolments.length === 0 ? (
+        <div style={S.emptyState}>
+          <BookOpen size={40} color="#cbd5e1" style={{ marginBottom: '12px' }} />
+          <div style={{ fontSize: '0.9rem' }}>No enrolments yet. Check Assigned Courses to get started!</div>
+        </div>
+      ) : (
+        <div style={S.grid}>
+          {enrolments.map(enrolment => {
+            const pct        = progress[enrolment.course.id] ?? 0;
+            const isCompleted = enrolment.status === 'completed';
+            const sc         = statusConfig[enrolment.status] || statusConfig.not_started;
+
+            return (
+              <div style={S.card} key={enrolment.id}>
+                <div style={S.cardBody}>
+                  <div style={S.cardTitle}>{enrolment.course.title}</div>
+                  <div style={S.cardDesc}>{enrolment.course.description}</div>
+
+                  <div style={S.badgeRow}>
+                    <span style={S.badge(sc.bg, sc.color)}>{sc.label}</span>
+                    <span style={S.badge('#f8fafc', '#64748b')}>{enrolment.source}</span>
                   </div>
 
-                  {/* Progress bar */}
-                  <div className="d-flex align-items-center gap-2">
-                    <div className="progress flex-grow-1" style={{ height: '10px' }}>
-                      <div
-                        className={`progress-bar ${pct === 100 ? 'bg-success' : 'bg-primary'}`}
-                        style={{ width: `${pct}%` }}
-                      />
+                  <div style={S.progressWrap}>
+                    <div style={S.progressBar}>
+                      <div style={S.progressFill(pct)} />
                     </div>
-                    <small className="text-muted fw-bold">{pct}%</small>
+                    <div style={S.progressText}>{pct}%</div>
                   </div>
 
-                  {enrolment.started_at && (
-                    <p className="small text-muted mt-2 mb-0">
-                      Started: {new Date(enrolment.started_at).toLocaleDateString()}
-                    </p>
-                  )}
-                  {enrolment.completed_at && (
-                    <p className="small text-muted mb-0">
-                      Completed: {new Date(enrolment.completed_at).toLocaleDateString()}
-                    </p>
-                  )}
+                  <div style={S.dateRow}>
+                    {enrolment.started_at && (
+                      <span style={S.dateText}>
+                        <Clock size={11} />
+                        Started: {new Date(enrolment.started_at).toLocaleDateString()}
+                      </span>
+                    )}
+                    {enrolment.completed_at && (
+                      <span style={S.dateText}>
+                        <CheckCircle size={11} color="#10b981" />
+                        Completed: {new Date(enrolment.completed_at).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="card-footer bg-white">
+
+                <div style={S.cardFooter}>
                   <button
-                    className="btn btn-primary btn-sm w-100"
+                    style={S.actionBtn(isCompleted)}
                     onClick={() => setActive(enrolment)}
                   >
-                    {enrolment.status === 'completed' ? '📄 Review Course' : '▶ Continue Learning'}
+                    {isCompleted
+                      ? <><FileText size={14} /> Review Course</>
+                      : <><PlayCircle size={14} /> Continue Learning</>
+                    }
                   </button>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

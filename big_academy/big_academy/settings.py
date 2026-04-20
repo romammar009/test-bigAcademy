@@ -32,10 +32,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 # who is allowed to access this site
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['67.219.109.30', 'localhost', '127.0.0.1']
 
 
 # Application definition
@@ -142,6 +142,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+# It tells Django to put static files in a folder named 'staticfiles' in your main project directory.
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [

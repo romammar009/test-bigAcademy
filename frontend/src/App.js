@@ -7,10 +7,11 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import Login from './pages/auth/Login';
+import Maintenance from './Maintenance';
 
 function ProtectedRoute({ children, allowedRoles }) {
   const { user } = useAuth();
-  if (!user) return <Navigate to="/login" />;
+  if (!user) return <Navigate to="/" />;
   if (allowedRoles && !allowedRoles.includes(user.role)) return <Navigate to="/login" />;
   return children;
 }
@@ -20,7 +21,12 @@ function App() {
     <AuthProvider>
       <Router>
         <Routes>
-          <Route path="/login" element={<Login />} />
+          {/* The Decoy: Any standard entry point leads to Maintenance */}
+          <Route path="/" element={<Maintenance />} />
+          <Route path="/login" element={<Navigate to="/" />} />
+
+          {/* Secret Entry Point: Replace 'big-staff-access-2026' with your own secret string */}
+          <Route path="/bigacademy-login2026" element={<Login />} />
 
           {/* Educator */}
           <Route path="/educator/*" element={
@@ -50,7 +56,7 @@ function App() {
             </ProtectedRoute>
           } />
 
-          <Route path="*" element={<Navigate to="/login" />} />
+          <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </Router>
     </AuthProvider>

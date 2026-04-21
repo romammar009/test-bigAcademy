@@ -69,7 +69,7 @@ ROOT_URLCONF = 'big_academy.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'frontend/build')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -146,8 +146,9 @@ STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 # Extra places to look for files (like your React build)
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'), 
+    os.path.join(BASE_DIR, 'frontend/build/static'), 
 ]
+
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -162,4 +163,5 @@ REST_FRAMEWORK = {
 CORS_ALLOWED_ORIGINS = [
     'http://67.219.109.30',
     'http://localhost:3000',
+    'http://127.0.0.1:8000',
 ]

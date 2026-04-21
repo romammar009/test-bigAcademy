@@ -4,10 +4,10 @@ const API = axios.create({
   baseURL: '/api/',
 });
 
-// Attach token to every request automatically
+// Attach token to every request automatically, except the login endpoint
 API.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
-  if (token) {
+  if (token && !config.url.includes('/auth/login/')) {
     config.headers.Authorization = `Token ${token}`;
   }
   return config;

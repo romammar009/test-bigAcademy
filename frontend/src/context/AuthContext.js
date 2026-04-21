@@ -13,7 +13,16 @@ const ROLE_REDIRECTS = {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('user');
-    return saved ? JSON.parse(saved) : null;
+    // Check if saved exists AND is not the string "undefined"
+    if (saved && saved !== "undefined") {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Error parsing user from localStorage", e);
+        return null;
+      }
+    }
+    return null;
   });
 
   const login = (userData, token) => {
@@ -29,7 +38,7 @@ export function AuthProvider({ children }) {
   };
 
   const getRedirectPath = (role) => {
-    return ROLE_REDIRECTS[role] || '/login';
+    return ROLE_REDIRECTS[role] || '/bigacademy-login2026';
   };
 
   return (

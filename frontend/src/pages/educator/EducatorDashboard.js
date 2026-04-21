@@ -54,7 +54,7 @@ export default function EducatorDashboard() {
   const handleLogout = async () => {
     try { await API.post('/auth/logout/'); } catch (err) {}
     logout();
-    navigate('/login');
+    navigate('/bigacademy-login2026');
   };
 
   const S = {

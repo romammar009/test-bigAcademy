@@ -11,7 +11,7 @@ import Maintenance from './Maintenance';
 
 function ProtectedRoute({ children, allowedRoles }) {
   const { user } = useAuth();
-  if (!user) return <Navigate to="/" />;
+  if (!user) return <Navigate to="/bigacademy-login2026" />;
   if (allowedRoles && !allowedRoles.includes(user.role)) return <Navigate to="/bigacademy-login2026" />;
   return children;
 }

@@ -648,6 +648,43 @@ def browse_courses(request):
 
     return Response(data, status=status.HTTP_200_OK)
 
+# ============================================================
+# ASSIGNMENTS PREVIEW
+# ============================================================
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def preview_assignment_users(request):
+    academy_user = get_academy_user(request)
+    if not academy_user or academy_user.role not in CONTENT_ROLES:
+        return Response({'error': 'Access denied.'}, status=403)
+
+    location_ids = request.data.get('location_ids', [])
+    roles        = request.data.get('roles', [])
+
+    users = Users.objects.filter(status='active')
+
+    if academy_user.role == 'area_manager':
+        assigned_location_ids = SuperAdminLocations.objects.filter(
+            user=academy_user
+        ).values_list('location_id', flat=True)
+        users = users.filter(location_id__in=assigned_location_ids)
+
+    if location_ids:
+        users = users.filter(location_id__in=location_ids)
+
+    if roles:
+        users = users.filter(role__in=roles)
+    else:
+        users = users.filter(role__in=['educator', 'branch_manager'])
+
+    data = [{
+        'id':       u.id,
+        'name':     f"{u.first_name} {u.last_name}",
+        'role':     u.role,
+        'location': u.location.name if u.location else '—',
+    } for u in users]
+
+    return Response({'users': data}, status=200)
 
 # ============================================================
 # SELF ENROL IN A COURSE
@@ -1696,73 +1733,90 @@ def list_assignments(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_assignment(request):
-    academy_user = get_academy_user(request)
-    if not academy_user or academy_user.role not in CONTENT_ROLES:
-        return Response({'error': 'Access denied.'}, status=403)
-
-    course_id       = request.data.get('course_id')
-    assignment_type = request.data.get('assignment_type', 'all')
-    target_value    = request.data.get('target_value', '')
-    mandatory       = request.data.get('mandatory', True)
-    due_at          = request.data.get('due_at')
-
+    print("CREATE ASSIGNMENT CALLED", request.data)
     try:
-        course = Courses.objects.get(id=course_id)
-    except Courses.DoesNotExist:
-        return Response({'error': 'Course not found.'}, status=404)
+        academy_user = get_academy_user(request)
+        if not academy_user or academy_user.role not in CONTENT_ROLES:
+            return Response({'error': 'Access denied.'}, status=403)
 
-    existing = Assignments.objects.filter(
-        course=course,
-        assignment_type=assignment_type,
-        target_value=target_value
-    ).exists()
-    if existing:
-        return Response({'error': 'This assignment already exists.'}, status=400)
+        course_id       = request.data.get('course_id')
+        assignment_type = request.data.get('assignment_type', 'all')
+        target_users    = request.data.get('target_users', [])
+        target_value    = request.data.get('target_value', '')
+        mandatory       = request.data.get('mandatory', True)
+        due_at          = request.data.get('due_at')
 
-    assignment = Assignments.objects.create(
-        course          = course,
-        assignment_type = assignment_type,
-        target_value    = target_value,
-        mandatory       = mandatory,
-        due_at          = due_at,
-        created_by      = academy_user,
-        created_at      = timezone.now(),
-        updated_at      = timezone.now(),
-    )
-
-    if assignment_type == 'all':
-        users = Users.objects.filter(status='active', location=academy_user.location)
-    elif assignment_type == 'user':
         try:
-            specific_user = Users.objects.get(id=int(target_value), status='active')
-            users = [specific_user]
-        except Users.DoesNotExist:
-            users = []
-    else:
-        users = Users.objects.filter(role=target_value, status='active', location=academy_user.location)
+            course = Courses.objects.get(id=course_id)
+        except Courses.DoesNotExist:
+            return Response({'error': 'Course not found.'}, status=404)
 
-    for user in users:
-        already_enrolled = Enrolments.objects.filter(user=user, course=course).exists()
-        if not already_enrolled:
-            Enrolments.objects.create(
-                user       = user,
-                course     = course,
-                source     = 'assignment',
-                status     = 'not_started',
-                created_at = timezone.now(),
-                updated_at = timezone.now(),
-            )
+        assignment = Assignments.objects.create(
+            course          = course,
+            assignment_type = assignment_type,
+            target_value    = target_value,
+            mandatory       = mandatory,
+            due_at          = due_at,
+            created_by      = academy_user,
+            created_at      = timezone.now(),
+            updated_at      = timezone.now(),
+        )
 
-    return Response({
-        'message': 'Course assigned successfully.',
-        'assignment': {
-            'id':              assignment.id,
-            'course_title':    course.title,
-            'assignment_type': assignment_type,
-            'target_value':    target_value,
-            'mandatory':       mandatory,
-        }
-    }, status=201)
+        if assignment_type == 'all':
+            if academy_user.role == 'area_manager':
+                assigned_location_ids = SuperAdminLocations.objects.filter(
+                    user=academy_user
+                ).values_list('location_id', flat=True)
+                users = Users.objects.filter(
+                    status='active',
+                    location_id__in=assigned_location_ids,
+                    role__in=['educator', 'branch_manager']
+                )
+            else:
+                users = Users.objects.filter(
+                    status='active',
+                    role__in=['educator', 'branch_manager', 'area_manager']
+                )
+        elif assignment_type == 'filtered':
+            users = Users.objects.filter(id__in=target_users, status='active')
+        elif assignment_type == 'user':
+            try:
+                specific_user = Users.objects.get(id=int(target_value), status='active')
+                users = [specific_user]
+            except Users.DoesNotExist:
+                users = []
+        else:
+            users = Users.objects.filter(role=target_value, status='active')
+
+        enrolled_count = 0
+        for user in users:
+            already_enrolled = Enrolments.objects.filter(user=user, course=course).exists()
+            if not already_enrolled:
+                Enrolments.objects.create(
+                    user       = user,
+                    course     = course,
+                    source     = 'assignment',
+                    status     = 'not_started',
+                    created_at = timezone.now(),
+                    updated_at = timezone.now(),
+                )
+                enrolled_count += 1
+
+        return Response({
+            'message': f'Course assigned successfully to {enrolled_count} user(s).',
+            'assignment': {
+                'id':              assignment.id,
+                'course_title':    course.title,
+                'assignment_type': assignment_type,
+                'mandatory':       mandatory,
+            }
+        }, status=201)
+
+    except Exception as e:
+        print("ERROR IN CREATE ASSIGNMENT:", str(e))
+        import traceback
+        traceback.print_exc()
+        return Response({'error': str(e)}, status=500)
 
 
 @api_view(['DELETE'])

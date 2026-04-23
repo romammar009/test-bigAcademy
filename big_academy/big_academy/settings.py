@@ -32,7 +32,7 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 DEBUG = False
 
 # who is allowed to access this site
-ALLOWED_HOSTS = ['67.219.109.30', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['67.219.109`.30', 'localhost', '127.0.0.1']
 
 
 # Application definition
@@ -142,9 +142,8 @@ STATIC_URL = 'static/'
 # It tells Django to put static files in a folder named 'staticfiles' in your main project directory.
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 # Extra places to look for files (like your React build)
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'frontend/build/static'), 
-]
+_FRONTEND_STATIC = os.path.join(BASE_DIR, 'frontend/build/static')
+STATICFILES_DIRS = [_FRONTEND_STATIC] if os.path.isdir(_FRONTEND_STATIC) else []
 
 
 REST_FRAMEWORK = {
@@ -162,3 +161,13 @@ CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'http://127.0.0.1:8000',
 ]
+
+# Email
+EMAIL_BACKEND      = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST         = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT         = int(os.getenv('EMAIL_PORT', 587))
+EMAIL_USE_TLS      = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_HOST_USER    = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Big Childcare Academy <noreply@bigchildcare.com.au>')
+FRONTEND_URL       = os.getenv('FRONTEND_URL', 'http://localhost:3000')

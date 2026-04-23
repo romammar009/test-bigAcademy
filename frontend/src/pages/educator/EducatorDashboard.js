@@ -24,7 +24,7 @@ const SIDEBAR_ITEMS = [
 
 export default function EducatorDashboard() {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab]     = useState('home');
+  const [activeTab, setActiveTab]     = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [stats, setStats]             = useState({
     total: 0, active: 0, completed: 0, certificates: 0
@@ -352,7 +352,7 @@ export default function EducatorDashboard() {
       <div style={S.sectionLabel}>Quick Links</div>
       <div style={S.quickLinksGrid}>
         {[
-          { Icon: BookOpen,      bg: '#eff6ff', color: '#2563eb', label: 'Assigned Courses', sub: 'View & enrol in courses',     tab: 'browse'       },
+          { Icon: BookOpen,      bg: '#eff6ff', color: '#2563eb', label: 'Assigned Courses', sub: 'View & enrol in courses',     tab: 'courses'       },
           { Icon: GraduationCap, bg: '#fefce8', color: '#d97706', label: 'My Learning',       sub: 'Continue where you left off', tab: 'learning'     },
           { Icon: Award,         bg: '#f5f3ff', color: '#7c3aed', label: 'Certificates',      sub: 'Download your certificates',  tab: 'certificates' },
         ].map(link => (
@@ -472,7 +472,7 @@ export default function EducatorDashboard() {
         </div>
 
         <div style={S.content}>
-          {activeTab === 'home'         && <HomeDashboard />}
+          {activeTab === 'dashboard'         && <HomeDashboard />}
           {activeTab === 'browse'       && <BrowseCourses />}
           {activeTab === 'learning'     && <MyLearning />}
           {activeTab === 'certificates' && <MyCertificates />}

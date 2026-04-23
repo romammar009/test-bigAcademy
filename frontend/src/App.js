@@ -7,7 +7,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import Login from './pages/auth/Login';
-import Maintenance from './Maintenance';
+import LandingPage from './LandingPage';
 
 function ProtectedRoute({ children, allowedRoles }) {
   const { user } = useAuth();
@@ -22,7 +22,7 @@ function App() {
       <Router>
         <Routes>
           {/* The Decoy: Any standard entry point leads to Maintenance */}
-          <Route path="/" element={<Maintenance />} />
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Navigate to="/" />} />
 
           {/* Secret Entry Point: Replace 'big-staff-access-2026' with your own secret string */}
@@ -51,7 +51,7 @@ function App() {
 
           {/* HR */}
           <Route path="/hr/*" element={
-            <ProtectedRoute allowedRoles={['hr']}>
+           <ProtectedRoute allowedRoles={['hr', 'executive_hr']}>
               <HRDashboard />
             </ProtectedRoute>
           } />

@@ -4,6 +4,7 @@ const AuthContext = createContext();
 
 // Role → dashboard path mapping
 const ROLE_REDIRECTS = {
+  'executive_hr':   '/hr',
   'educator':       '/educator',
   'branch_manager': '/branch-manager',
   'area_manager':   '/area-manager',

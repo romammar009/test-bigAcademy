@@ -33,11 +33,11 @@ from .serializers import (
 # ============================================================
 # ROLE CONSTANTS
 # ============================================================
-HR_ROLES         = ['hr']                                               # HR only
-MANAGEMENT_ROLES = ['hr', 'area_manager', 'branch_manager']            # All management
-CONTENT_ROLES    = ['hr', 'area_manager']                              # Can CRUD courses/modules
-UNLOCK_ROLES     = ['hr', 'area_manager', 'branch_manager']            # Can review unlock requests
-ONBOARD_ROLES    = ['hr']                                               # Can onboard/offboard users
+HR_ROLES         = ['hr', 'executive_hr']                                               # HR only
+MANAGEMENT_ROLES = ['hr', 'executive_hr', 'area_manager', 'branch_manager']            # All management
+CONTENT_ROLES    = ['hr', 'executive_hr', 'area_manager']                             # Can CRUD courses/modules
+UNLOCK_ROLES     = ['hr', 'executive_hr', 'area_manager', 'branch_manager']          # Can review unlock requests
+ONBOARD_ROLES    = ['hr', 'executive_hr']                                              # Can onboard/offboard users
 
 
 # ============================================================

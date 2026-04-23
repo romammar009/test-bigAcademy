@@ -21,11 +21,12 @@ class Locations(models.Model):
 
 class Users(models.Model):
 
-    ROLE_CHOICES = [
-        ('hr',              'HR'),              # Full access, can manage users
-        ('area_manager',    'Area Manager'),    # Create/submit courses for HR approval
-        ('branch_manager',  'Branch Manager'),  # View only
-        ('educator',        'Educator'),        # View only
+ROLE_CHOICES = [
+        ('executive_hr',    'Executive HR'),     # Billie only — full system + database
+        ('hr',              'HR'),               # Rob, Billy, Sean — full LMS access
+        ('area_manager',    'Area Manager'),     # Create/submit courses for HR approval
+        ('branch_manager',  'Branch Manager'),   # View only
+        ('educator',        'Educator'),         # View only
     ]
 
     STATUS_CHOICES = [

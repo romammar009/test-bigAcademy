@@ -1,3 +1,4 @@
+import NotificationsPage from '../shared/NotificationsPage';
 import logo from '../../BigChildcare-Logo.png';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
@@ -8,23 +9,17 @@ import API from '../../api/axios';
 import { useNavigate } from 'react-router-dom';
 import NotificationBell from '../../components/NotificationBell';
 import {
-  LayoutDashboard,
-  BookOpen,
-  GraduationCap,
-  Award,
-  LogOut,
-  ChevronLeft,
-  ChevronRight,
-  BookMarked,
-  PlayCircle,
-  CheckCircle,
+  LayoutDashboard, BookOpen, GraduationCap,
+  Award, LogOut, ChevronLeft, ChevronRight,
+  BookMarked, PlayCircle, CheckCircle, Bell,
 } from 'lucide-react';
 
 const SIDEBAR_ITEMS = [
-  { key: 'home',         icon: LayoutDashboard, label: 'Dashboard'       },
-  { key: 'browse',       icon: BookOpen,        label: 'Assigned Courses' },
-  { key: 'learning',     icon: GraduationCap,   label: 'My Learning'     },
-  { key: 'certificates', icon: Award,           label: 'Certificates'    },
+  { key: 'dashboard',       path: '/educator/dashboard',       icon: LayoutDashboard, label: 'Dashboard'        },
+  { key: 'courses',         path: '/educator/courses',         icon: BookOpen,        label: 'Assigned Courses' },
+  { key: 'learning',        path: '/educator/learning',        icon: GraduationCap,   label: 'My Learning'      },
+  { key: 'certificates',    path: '/educator/certificates',    icon: Award,           label: 'Certificates'     },
+  { key: 'notifications', icon: Bell, label: 'Notifications'},
 ];
 
 export default function EducatorDashboard() {
@@ -35,6 +30,7 @@ export default function EducatorDashboard() {
     total: 0, active: 0, completed: 0, certificates: 0
   });
   const navigate = useNavigate();
+  const [recentNotifs, setRecentNotifs] = useState([]);
 
   useEffect(() => {
     API.get('/my-learning/').then(res => {
@@ -49,12 +45,15 @@ export default function EducatorDashboard() {
     API.get('/certificates/').then(res => {
       setStats(prev => ({ ...prev, certificates: res.data.length }));
     }).catch(() => {});
+    API.get('/notifications/').then(res => {
+      setRecentNotifs(res.data.notifications.slice(0, 3));
+    }).catch(() => {});
   }, []);
 
   const handleLogout = async () => {
     try { await API.post('/auth/logout/'); } catch (err) {}
     logout();
-    navigate('/bigacademy-login2026');
+    navigate('/login');
   };
 
   const S = {
@@ -66,13 +65,13 @@ export default function EducatorDashboard() {
     sidebar: {
       width: sidebarOpen ? '240px' : '68px',
       minHeight: '100vh',
-      background: 'linear-gradient(180deg, #29abe2 0%, #0891b2 100%)',
+      background: 'linear-gradient(180deg, #0369a1 0%, #29abe2 100%)',
       display: 'flex',
       flexDirection: 'column',
       transition: 'width 0.25s ease',
       overflow: 'hidden',
       flexShrink: 0,
-      boxShadow: '3px 0 16px rgba(10,13,74,0.18)',
+      boxShadow: '3px 0 16px rgba(3,105,161,0.2)',
     },
     sidebarHeader: {
       padding: '0 12px',
@@ -203,13 +202,8 @@ export default function EducatorDashboard() {
       whiteSpace: 'nowrap',
       overflow: 'hidden',
     },
-    main: {
-      flex: 1,
-      display: 'flex',
-      flexDirection: 'column',
-      minWidth: 0,
-      background: '#ecfeff',
-    },
+  
+      main: { flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#f0f9ff' },
     topbar: {
       height: '64px',
       background: '#fff',
@@ -231,12 +225,12 @@ export default function EducatorDashboard() {
     },
     locationBadge: {
       fontSize: '0.8rem',
-      color: '#0891b2',
+      color: '#0369a1',
       fontWeight: '600',
-      background: '#ecfeff',
+      background: '#f0f9ff',
       padding: '4px 12px',
       borderRadius: '20px',
-      border: '1px solid #a5f3fc',
+      border: '1px solid #bae6fd',
     },
     content: {
       flex: 1,
@@ -257,7 +251,7 @@ export default function EducatorDashboard() {
     },
     statsGrid: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
       gap: '16px',
       marginBottom: '32px',
     },
@@ -354,6 +348,7 @@ export default function EducatorDashboard() {
         ))}
       </div>
 
+      {/* Quick Links section */}
       <div style={S.sectionLabel}>Quick Links</div>
       <div style={S.quickLinksGrid}>
         {[
@@ -372,6 +367,42 @@ export default function EducatorDashboard() {
           </div>
         ))}
       </div>
+      {/* Latest Updates */}
+      {recentNotifs.length > 0 && (
+        <div style={{ marginTop: '28px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <div style={S.sectionLabel}>Latest Updates</div>
+            <button
+              onClick={() => setActiveTab('notifications')}
+              style={{ background: 'none', border: 'none', color: '#0891b2', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer' }}
+            >
+             View all →
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {recentNotifs.map(n => (
+              <div key={n.id} style={{
+                background: '#fff', borderRadius: '10px', padding: '12px 16px',
+                border: `1px solid ${!n.is_read ? '#bae6fd' : '#e2e8f0'}`,
+                display: 'flex', gap: '10px', alignItems: 'flex-start',
+              }}>
+                <div style={{
+                  width: '8px', height: '8px', borderRadius: '50%',
+                  background: !n.is_read ? '#0891b2' : '#e2e8f0',
+                  flexShrink: 0, marginTop: '5px',
+                }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#1e293b', marginBottom: '2px' }}>{n.title}</div>
+                  <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{n.message}</div>
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                  {new Date(n.created_at).toLocaleDateString()}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -445,6 +476,7 @@ export default function EducatorDashboard() {
           {activeTab === 'browse'       && <BrowseCourses />}
           {activeTab === 'learning'     && <MyLearning />}
           {activeTab === 'certificates' && <MyCertificates />}
+          {activeTab === 'notifications' && <NotificationsPage />}
         </div>
       </div>
     </div>

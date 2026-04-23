@@ -203,6 +203,7 @@ class LessonProgress(models.Model):
 
 class Quizzes(models.Model):
     course            = models.ForeignKey(Courses, models.DO_NOTHING, blank=True, null=True)
+    module            = models.ForeignKey(CourseModules, models.DO_NOTHING, blank=True, null=True)
     lesson            = models.ForeignKey(Lessons, models.DO_NOTHING, blank=True, null=True)
     title             = models.CharField(max_length=255)
     pass_mark_percent = models.SmallIntegerField()

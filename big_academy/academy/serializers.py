@@ -114,7 +114,7 @@ class CourseCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Courses
-        fields = ['status', 'title', 'description', 'version', 'estimated_minutes', 'expiry_months']
+        fields = ['title', 'description', 'version', 'estimated_minutes', 'expiry_months']
 
 
 class ModuleCreateSerializer(serializers.ModelSerializer):

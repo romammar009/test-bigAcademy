@@ -44,7 +44,10 @@ export default function CoursesManager({ accentColor = '#1a1f8c' }) {
       setForm({ title: '', description: '', version: '1.0', estimated_minutes: '', expiry_months: '' });
       fetchCourses();
     } catch (err) {
-      showMsg('Something went wrong.', 'error');
+      const detail = err?.response?.data
+        ? JSON.stringify(err.response.data)
+        : err.message;
+      showMsg(`Error: ${detail}`, 'error');
     }
   };
 

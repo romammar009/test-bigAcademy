@@ -35,7 +35,7 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 DEBUG = os.getenv('DEBUG', 'True') == 'False'
 
 # who is allowed to access this site
-ALLOWED_HOSTS = ['67.219.109.30', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['academy.bigchildcare.com', '67.219.109.30', 'localhost', '127.0.0.1']
 
 
 # Application definition
@@ -160,6 +160,7 @@ REST_FRAMEWORK = {
 
 
 CORS_ALLOWED_ORIGINS = [
+    'https://academy.bigchildcare.com',
     'http://67.219.109.30',
     'http://localhost:3000',
     'http://127.0.0.1:8000',

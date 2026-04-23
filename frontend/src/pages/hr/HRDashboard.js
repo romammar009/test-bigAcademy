@@ -10,11 +10,12 @@ import HRManageUsers from './HRManageUsers';
 import HRUnlockRequests from './HRUnlockRequests';
 import HRReports from './HRReports';
 import NotificationBell from '../../components/NotificationBell';
+import NotificationsPage from '../shared/NotificationsPage';
 import {
   LayoutDashboard, Users, Unlock, BarChart2,
   BookOpen, ClipboardList, GraduationCap,
   LogOut, ChevronLeft, ChevronRight,
-  UserCheck, ShieldCheck, TrendingUp,
+  UserCheck, ShieldCheck, TrendingUp, Bell,
 } from 'lucide-react';
 
 const SIDEBAR_ITEMS = [
@@ -24,13 +25,15 @@ const SIDEBAR_ITEMS = [
   { key: 'grading',     path: '/hr/grading',     icon: GraduationCap,   label: 'Quiz Grading'    },
   { key: 'users',       path: '/hr/users',       icon: Users,           label: 'Users'           },
   { key: 'requests',    path: '/hr/requests',    icon: Unlock,          label: 'Unlock Requests' },
-  { key: 'reports',     path: '/hr/reports',     icon: BarChart2,       label: 'Reports'         },
+  { key: 'reports',       path: '/hr/reports',        icon: BarChart2,       label: 'Reports'         },
+  { key: 'notifications', path: '/hr/notifications',  icon: Bell,            label: 'Notifications'   },
 ];
 
 export default function HRDashboard() {
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [stats, setStats]             = useState({ total_users: 0, educators: 0, managers: 0, pending_unlocks: 0 });
+  const [stats, setStats] = useState({ total_users: 0, educators: 0, managers: 0, pending_unlocks: 0 });
+  const [latestNotifications, setLatestNotifications] = useState([]);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -59,6 +62,9 @@ export default function HRDashboard() {
     API.get('/attempts/pending-grading/').then(res => {
       setStats(prev => ({ ...prev, pending_grading: res.data.length }));
     }).catch(() => {});
+    API.get('/notifications/').then(res => {
+      setLatestNotifications((res.data.notifications || []).slice(0, 3));
+    }).catch(() => {});
   }, []);
 
   const handleLogout = async () => {
@@ -76,13 +82,13 @@ export default function HRDashboard() {
     sidebar: {
       width: sidebarOpen ? '240px' : '68px',
       minHeight: '100vh',
-      background: 'linear-gradient(180deg, #0a0d4a 0%, #21289c 100%)',
+      background: 'linear-gradient(180deg, #6b0f1a 0%, #b5132a 100%)',
       display: 'flex',
       flexDirection: 'column',
       transition: 'width 0.25s ease',
       overflow: 'hidden',
       flexShrink: 0,
-      boxShadow: '3px 0 16px rgba(10,13,74,0.2)',
+      boxShadow: '3px 0 16px rgba(107,15,26,0.2)',
     },
     sidebarHeader: {
       padding: '0 12px',
@@ -214,7 +220,7 @@ export default function HRDashboard() {
       whiteSpace: 'nowrap',
       overflow: 'hidden',
     },
-    main: { flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#eef1ff' },
+    main: { flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#fff0f0' },
     topbar: {
       height: '64px',
       background: '#fff',
@@ -236,12 +242,12 @@ export default function HRDashboard() {
     },
     roleBadge: {
       fontSize: '0.8rem',
-      color: '#1a1f8c',
+      color: '#b5132a',
       fontWeight: '600',
-      background: '#eef1ff',
+      background: '#fff0f0',
       padding: '4px 12px',
       borderRadius: '20px',
-      border: '1px solid #c7d2fe',
+      border: '1px solid #fecdd3',
     },
     content: { flex: 1, padding: '28px', overflowY: 'auto' },
     greetingTitle:    { fontSize: '1.4rem', fontWeight: '700', color: '#0f172a', marginBottom: '4px' },
@@ -285,16 +291,14 @@ export default function HRDashboard() {
 
   const HomeDashboard = () => (
     <div>
-      <div style={S.greetingTitle}>
-        Welcome, {user.first_name}! 👋
-      </div>
+      <div style={S.greetingTitle}>Welcome, {user.first_name}! 👋</div>
       <div style={S.greetingSubtitle}>
         {isExecutive ? 'HR Executive — Full system access' : 'HR — Manage users and monitor progress'}
       </div>
 
       <div style={S.statsGrid}>
         {[
-          { label: 'Total Users',     value: stats.total_users,    Icon: Users,      accent: '#1a1f8c', iconColor: '#1a1f8c', iconBg: '#eef1ff' },
+          { label: 'Total Users',     value: stats.total_users,    Icon: Users,      accent: '#b5132a', iconColor: '#b5132a', iconBg: '#fff0f0' },
           { label: 'Educators',       value: stats.educators,      Icon: UserCheck,  accent: '#10b981', iconColor: '#10b981', iconBg: '#f0fdf4' },
           { label: 'Managers',        value: stats.managers,       Icon: ShieldCheck,accent: '#2563eb', iconColor: '#2563eb', iconBg: '#eff6ff' },
           { label: 'Pending Unlocks', value: stats.pending_unlocks,Icon: TrendingUp, accent: '#f59e0b', iconColor: '#f59e0b', iconBg: '#fefce8' },
@@ -312,7 +316,7 @@ export default function HRDashboard() {
       <div style={S.sectionLabel}>Quick Links</div>
       <div style={S.quickLinksGrid}>
         {[
-          { Icon: Users,    bg: '#eef1ff', color: '#1a1f8c', label: 'Manage Users',    sub: 'Onboard & offboard staff',      path: '/hr/users'    },
+          { Icon: Users,    bg: '#fff0f0', color: '#b5132a', label: 'Manage Users',    sub: 'Onboard & offboard staff',       path: '/hr/users'    },
           { Icon: Unlock,   bg: '#fefce8', color: '#d97706', label: 'Unlock Requests', sub: 'Review pending quiz unlocks',    path: '/hr/requests' },
           { Icon: BarChart2,bg: '#f0fdf4', color: '#059669', label: 'Reports',         sub: 'View completion & staff reports',path: '/hr/reports'  },
         ].map(link => (
@@ -326,6 +330,38 @@ export default function HRDashboard() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div style={{ marginTop: '32px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <div style={S.sectionLabel}>Latest Updates</div>
+          <span onClick={() => navigate('/hr/notifications')}
+            style={{ fontSize: '0.78rem', color: '#b5132a', fontWeight: '600', cursor: 'pointer' }}>
+            View all →
+          </span>
+        </div>
+        {latestNotifications.length === 0 ? (
+          <div style={{ color: '#94a3b8', fontSize: '0.85rem' }}>No notifications yet.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {latestNotifications.map(n => (
+              <div key={n.id} style={{
+                background: n.is_read ? '#fff' : '#fff0f0',
+                border: `1px solid ${n.is_read ? '#e2e8f0' : '#fecdd3'}`,
+                borderRadius: '10px', padding: '12px 16px',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+              }}>
+                <div>
+                  <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#1e293b', marginBottom: '3px' }}>{n.title}</div>
+                  <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{n.message}</div>
+                </div>
+                {!n.is_read && (
+                  <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#b5132a', flexShrink: 0, marginTop: '4px' }} />
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -395,7 +431,7 @@ export default function HRDashboard() {
       <div style={S.main}>
         <div style={S.topbar}>
           <div style={S.pageTitle}>
-            {ActiveIcon && <ActiveIcon size={18} color="#1a1f8c" />}
+            {ActiveIcon && <ActiveIcon size={18} color="#b5132a" />}
             {activeItem?.label}
           </div>
           <NotificationBell />
@@ -405,13 +441,14 @@ export default function HRDashboard() {
         </div>
 
         <div style={S.content}>
-          {activeItem?.key === 'dashboard'    && <HomeDashboard />}
-          {activeItem?.key === 'courses'     && <CoursesManager accentColor="#1a1f8c" />}
-          {activeItem?.key === 'assignments' && <AssignmentsManager accentColor="#1a1f8c" />}  
-          {activeItem?.key === 'users'        && <HRManageUsers isExecutive={isExecutive} />}
-          {activeItem?.key === 'requests'     && <HRUnlockRequests />}
-          {activeItem?.key === 'reports'      && <HRReports />}
-          {activeItem?.key === 'grading' && <QuizGrading accentColor="#1a1f8c" />}
+          {activeItem?.key === 'dashboard'       && <HomeDashboard />}
+          {activeItem?.key === 'courses'         && <CoursesManager accentColor="#b5132a" />}
+          {activeItem?.key === 'assignments'     && <AssignmentsManager accentColor="#b5132a" />}
+          {activeItem?.key === 'users'           && <HRManageUsers isExecutive={isExecutive} />}
+          {activeItem?.key === 'requests'        && <HRUnlockRequests />}
+          {activeItem?.key === 'reports'         && <HRReports />}
+          {activeItem?.key === 'grading'         && <QuizGrading accentColor="#b5132a" />}
+          {activeItem?.key === 'notifications'   && <NotificationsPage />}
         </div>
       </div>
     </div>

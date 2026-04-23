@@ -1,7 +1,7 @@
 import QuizGrading from '../shared/QuizGrading';
 import CoursesManager from '../shared/CoursesManager';
 import AssignmentsManager from '../shared/AssignmentsManager';
-// import AdminQuizGrading from '../admin/AdminQuizGrading';
+import NotificationsPage from '../shared/NotificationsPage';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -15,23 +15,25 @@ import {
   LayoutDashboard, Users, Unlock, BarChart2,
   BookOpen, ClipboardList, GraduationCap,
   LogOut, ChevronLeft, ChevronRight,
-  BookMarked, CheckCircle, Clock,
+  BookMarked, Bell,
 } from 'lucide-react';
 
 const SIDEBAR_ITEMS = [
-  { key: 'dashboard', path: '/area-manager/dashboard', icon: LayoutDashboard, label: 'Dashboard'       },
-  { key: 'courses',   path: '/area-manager/courses',   icon: BookOpen,        label: 'Courses'         },
-  { key: 'assignments', path: '/area-manager/assignments', icon: ClipboardList, label: 'Assignments'   },
-  { key: 'grading',   path: '/area-manager/grading',   icon: GraduationCap,   label: 'Quiz Grading'   },
-  { key: 'requests',  path: '/area-manager/requests',  icon: Unlock,          label: 'Unlock Requests' },
-  { key: 'staff',     path: '/area-manager/staff',     icon: Users,           label: 'Staff'           },
-  { key: 'reports',   path: '/area-manager/reports',   icon: BarChart2,       label: 'Reports'         },
+  { key: 'dashboard',     path: '/area-manager/dashboard',     icon: LayoutDashboard, label: 'Dashboard'       },
+  { key: 'courses',       path: '/area-manager/courses',       icon: BookOpen,        label: 'Courses'         },
+  { key: 'assignments',   path: '/area-manager/assignments',   icon: ClipboardList,   label: 'Assignments'     },
+  { key: 'grading',       path: '/area-manager/grading',       icon: GraduationCap,   label: 'Quiz Grading'    },
+  { key: 'requests',      path: '/area-manager/requests',      icon: Unlock,          label: 'Unlock Requests' },
+  { key: 'staff',         path: '/area-manager/staff',         icon: Users,           label: 'Staff'           },
+  { key: 'reports',       path: '/area-manager/reports',       icon: BarChart2,       label: 'Reports'         },
+  { key: 'notifications', path: '/area-manager/notifications', icon: Bell,            label: 'Notifications'   },
 ];
 
 export default function AreaManagerDashboard() {
   const { user, logout } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [stats, setStats] = useState({ total_staff: 0, pending_grading: 0, pending_unlocks: 0, completed: 0 });
+  const [sidebarOpen, setSidebarOpen]   = useState(true);
+  const [stats, setStats]               = useState({ total_staff: 0, pending_grading: 0, pending_unlocks: 0, completed: 0 });
+  const [recentNotifs, setRecentNotifs] = useState([]);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -53,12 +55,15 @@ export default function AreaManagerDashboard() {
     API.get('/unlock-requests/').then(res => {
       setStats(prev => ({ ...prev, pending_unlocks: res.data.length }));
     }).catch(() => {});
+    API.get('/notifications/').then(res => {
+      setRecentNotifs(res.data.notifications.slice(0, 3));
+    }).catch(() => {});
   }, []);
 
   const handleLogout = async () => {
     try { await API.post('/auth/logout/'); } catch (err) {}
     logout();
-    navigate('/bigacademy-login2026');
+    navigate('/login');
   };
 
   const S = {
@@ -69,11 +74,11 @@ export default function AreaManagerDashboard() {
     sidebar: {
       width: sidebarOpen ? '240px' : '68px',
       minHeight: '100vh',
-      background: 'linear-gradient(180deg, #1d24a5 0%, #2563eb 100%)',
+      background: 'linear-gradient(180deg, #0a0d4a 0%, #1a1f8c 100%)',
       display: 'flex', flexDirection: 'column',
       transition: 'width 0.25s ease',
       overflow: 'hidden', flexShrink: 0,
-      boxShadow: '3px 0 16px rgba(26,31,140,0.2)',
+      boxShadow: '3px 0 16px rgba(10,13,74,0.2)',
     },
     sidebarHeader: {
       padding: '0 12px', height: '64px',
@@ -86,7 +91,7 @@ export default function AreaManagerDashboard() {
     toggleBtn: {
       background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)',
       cursor: 'pointer', padding: '4px', marginLeft: 'auto', flexShrink: 0,
-      display: 'flex', alignItems: 'center',minWidth: '24px',
+      display: 'flex', alignItems: 'center', minWidth: '24px',
     },
     navSection: { padding: '20px 0 8px', flex: 1 },
     navSectionLabel: {
@@ -120,7 +125,7 @@ export default function AreaManagerDashboard() {
       cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
       whiteSpace: 'nowrap', overflow: 'hidden',
     },
-    main: { flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#eff6ff' },
+    main: { flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#eef1ff' },
     topbar: {
       height: '64px', background: '#fff', borderBottom: '1px solid #bfdbfe',
       display: 'flex', alignItems: 'center', padding: '0 28px', gap: '16px',
@@ -131,9 +136,9 @@ export default function AreaManagerDashboard() {
       flex: 1, display: 'flex', alignItems: 'center', gap: '8px',
     },
     roleBadge: {
-      fontSize: '0.8rem', color: '#2563eb', fontWeight: '600',
-      background: '#eff6ff', padding: '4px 12px',
-      borderRadius: '20px', border: '1px solid #bfdbfe',
+      fontSize: '0.8rem', color: '#1a1f8c', fontWeight: '600',
+      background: '#eef1ff', padding: '4px 12px',
+      borderRadius: '20px', border: '1px solid #c7d2fe',
     },
     content: { flex: 1, padding: '28px', overflowY: 'auto' },
     greetingTitle:    { fontSize: '1.4rem', fontWeight: '700', color: '#0f172a', marginBottom: '4px' },
@@ -170,51 +175,89 @@ export default function AreaManagerDashboard() {
 
   const ActiveIcon = activeItem?.icon;
 
-  const HomeDashboard = () => (
-    <div>
-      <div style={S.greetingTitle}>Welcome, {user.first_name}! 👋</div>
-      <div style={S.greetingSubtitle}>Area Manager — Manage courses and track staff progress</div>
+  const HomeDashboard = () => {
+    return (
+      <div>
+        <div style={S.greetingTitle}>Welcome, {user.first_name}! 👋</div>
+        <div style={S.greetingSubtitle}>Area Manager — Manage courses and track staff progress</div>
 
-      <div style={S.statsGrid}>
-        {[
-          { label: 'Total Staff',      value: stats.total_staff,     Icon: Users,        accent: '#2563eb', iconColor: '#2563eb', iconBg: '#eff6ff' },
-          { label: 'Pending Grading',  value: stats.pending_grading, Icon: GraduationCap,accent: '#f59e0b', iconColor: '#f59e0b', iconBg: '#fefce8' },
-          { label: 'Unlock Requests',  value: stats.pending_unlocks, Icon: Unlock,       accent: '#ef4444', iconColor: '#ef4444', iconBg: '#fef2f2' },
-          { label: 'Courses',          value: 0,                     Icon: BookMarked,   accent: '#10b981', iconColor: '#10b981', iconBg: '#f0fdf4' },
-        ].map(stat => (
-          <div key={stat.label} style={S.statCard(stat.accent)}>
-            <div style={S.statIconBox(stat.iconBg)}>
-              <stat.Icon size={18} color={stat.iconColor} />
+        <div style={S.statsGrid}>
+          {[
+            { label: 'Total Staff',     value: stats.total_staff,     Icon: Users,        accent: '#2563eb', iconColor: '#2563eb', iconBg: '#eff6ff' },
+            { label: 'Pending Grading', value: stats.pending_grading, Icon: GraduationCap,accent: '#f59e0b', iconColor: '#f59e0b', iconBg: '#fefce8' },
+            { label: 'Unlock Requests', value: stats.pending_unlocks, Icon: Unlock,       accent: '#ef4444', iconColor: '#ef4444', iconBg: '#fef2f2' },
+            { label: 'Courses',         value: 0,                     Icon: BookMarked,   accent: '#10b981', iconColor: '#10b981', iconBg: '#f0fdf4' },
+          ].map(stat => (
+            <div key={stat.label} style={S.statCard(stat.accent)}>
+              <div style={S.statIconBox(stat.iconBg)}>
+                <stat.Icon size={18} color={stat.iconColor} />
+              </div>
+              <div style={S.statNumber}>{stat.value}</div>
+              <div style={S.statLabel}>{stat.label}</div>
             </div>
-            <div style={S.statNumber}>{stat.value}</div>
-            <div style={S.statLabel}>{stat.label}</div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
 
-      <div style={S.sectionLabel}>Quick Links</div>
-      <div style={S.quickLinksGrid}>
-        {[
-          { Icon: BookOpen,      bg: '#eff6ff', color: '#2563eb', label: 'Courses',         sub: 'Create & manage courses',      path: '/area-manager/courses'     },
-          { Icon: ClipboardList, bg: '#f0fdf4', color: '#059669', label: 'Assignments',      sub: 'Assign courses to staff',      path: '/area-manager/assignments' },
-          { Icon: GraduationCap, bg: '#fefce8', color: '#d97706', label: 'Quiz Grading',     sub: 'Grade short answer responses', path: '/area-manager/grading'     },
-          { Icon: Unlock,        bg: '#fef2f2', color: '#ef4444', label: 'Unlock Requests',  sub: 'Review quiz unlock requests',  path: '/area-manager/requests'    },
-          { Icon: Users,         bg: '#f5f3ff', color: '#7c3aed', label: 'Staff',            sub: 'View staff at your locations', path: '/area-manager/staff'       },
-          { Icon: BarChart2,     bg: '#ecfeff', color: '#0891b2', label: 'Reports',          sub: 'Track completion & progress',  path: '/area-manager/reports'     },
-        ].map(link => (
-          <div key={link.path} style={S.quickLink} onClick={() => navigate(link.path)}>
-            <div style={S.quickLinkIconBox(link.bg)}>
-              <link.Icon size={18} color={link.color} />
+        <div style={S.sectionLabel}>Quick Links</div>
+        <div style={S.quickLinksGrid}>
+          {[
+            { Icon: BookOpen,      bg: '#eff6ff', color: '#2563eb', label: 'Courses',        sub: 'Create & manage courses',      path: '/area-manager/courses'     },
+            { Icon: ClipboardList, bg: '#f0fdf4', color: '#059669', label: 'Assignments',     sub: 'Assign courses to staff',      path: '/area-manager/assignments' },
+            { Icon: GraduationCap, bg: '#fefce8', color: '#d97706', label: 'Quiz Grading',    sub: 'Grade short answer responses', path: '/area-manager/grading'     },
+            { Icon: Unlock,        bg: '#fef2f2', color: '#ef4444', label: 'Unlock Requests', sub: 'Review quiz unlock requests',  path: '/area-manager/requests'    },
+            { Icon: Users,         bg: '#f5f3ff', color: '#7c3aed', label: 'Staff',           sub: 'View staff at your locations', path: '/area-manager/staff'       },
+            { Icon: BarChart2,     bg: '#ecfeff', color: '#0891b2', label: 'Reports',         sub: 'Track completion & progress',  path: '/area-manager/reports'     },
+          ].map(link => (
+            <div key={link.path} style={S.quickLink} onClick={() => navigate(link.path)}>
+              <div style={S.quickLinkIconBox(link.bg)}>
+                <link.Icon size={18} color={link.color} />
+              </div>
+              <div>
+                <div style={S.quickLinkTitle}>{link.label}</div>
+                <div style={S.quickLinkSub}>{link.sub}</div>
+              </div>
             </div>
-            <div>
-              <div style={S.quickLinkTitle}>{link.label}</div>
-              <div style={S.quickLinkSub}>{link.sub}</div>
+          ))}
+        </div>
+
+        {recentNotifs.length > 0 && (
+          <div style={{ marginTop: '28px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={S.sectionLabel}>Latest Updates</div>
+              <button
+                onClick={() => navigate('/area-manager/notifications')}
+                style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer' }}
+              >
+                View all →
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {recentNotifs.map(n => (
+                <div key={n.id} style={{
+                  background: '#fff', borderRadius: '10px', padding: '12px 16px',
+                  border: `1px solid ${!n.is_read ? '#bfdbfe' : '#e2e8f0'}`,
+                  display: 'flex', gap: '10px', alignItems: 'flex-start',
+                }}>
+                  <div style={{
+                    width: '8px', height: '8px', borderRadius: '50%',
+                    background: !n.is_read ? '#2563eb' : '#e2e8f0',
+                    flexShrink: 0, marginTop: '5px',
+                  }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#1e293b', marginBottom: '2px' }}>{n.title}</div>
+                    <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{n.message}</div>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                    {new Date(n.created_at).toLocaleDateString()}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        ))}
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div style={S.layout}>
@@ -248,7 +291,7 @@ export default function AreaManagerDashboard() {
               )}
               {sidebarOpen && key === 'grading' && stats.pending_grading > 0 && (
                 <span style={{ marginLeft: 'auto', fontSize: '0.65rem', fontWeight: '700', padding: '2px 6px', borderRadius: '10px', background: '#f59e0b', color: '#fff', minWidth: '18px', textAlign: 'center' }}>
-                 {stats.pending_grading}
+                  {stats.pending_grading}
                 </span>
               )}
             </div>
@@ -284,13 +327,14 @@ export default function AreaManagerDashboard() {
         </div>
 
         <div style={S.content}>
-          {activeItem?.key === 'dashboard'   && <HomeDashboard />}
-          {activeItem?.key === 'courses'     && <CoursesManager accentColor="#2563eb" />}
-          {activeItem?.key === 'assignments' && <AssignmentsManager accentColor="#2563eb" />}
-          {activeItem?.key === 'grading' && <QuizGrading accentColor="#2563eb" />}
-          {activeItem?.key === 'requests'    && <SuperAdminUnlockRequests />}
-          {activeItem?.key === 'staff'       && <SuperAdminStaff />}
-          {activeItem?.key === 'reports'     && <SuperAdminReports />}
+          {activeItem?.key === 'dashboard'     && <HomeDashboard />}
+          {activeItem?.key === 'courses'       && <CoursesManager accentColor="#2563eb" />}
+          {activeItem?.key === 'assignments'   && <AssignmentsManager accentColor="#2563eb" />}
+          {activeItem?.key === 'grading'       && <QuizGrading accentColor="#2563eb" />}
+          {activeItem?.key === 'requests'      && <SuperAdminUnlockRequests />}
+          {activeItem?.key === 'staff'         && <SuperAdminStaff />}
+          {activeItem?.key === 'reports'       && <SuperAdminReports />}
+          {activeItem?.key === 'notifications' && <NotificationsPage />}
         </div>
       </div>
     </div>

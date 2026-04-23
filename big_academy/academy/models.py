@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils.text import slugify
 
 
 class Locations(models.Model):
@@ -47,10 +48,34 @@ ROLE_CHOICES = [
     updated_at       = models.DateTimeField(blank=True, null=True)
     last_login_at    = models.DateTimeField(blank=True, null=True)
     phone_number     = models.CharField(max_length=20, blank=True, null=True)
-    employee_id      = models.CharField(max_length=20, blank=True, null=True)
+unique_lms_id = models.CharField(
+        max_length=50, unique=True, blank=True, null=True,
+        help_text='Auto-generated ID like H1-rob, E3-jane'
+    )
+    is_protected = models.BooleanField(
+        default=False,
+        help_text='If True, this account cannot be deleted (for HR accounts)'
+    )
 
-    def __str__(self):
-        return f"{self.first_name} {self.last_name} ({self.role})"
+def __str__(self):
+        display_id = self.unique_lms_id or self.role
+        return f"{self.first_name} {self.last_name} ({display_id})"
+
+    def save(self, *args, **kwargs):
+        if not self.unique_lms_id:
+            prefix_map = {
+                'executive_hr': 'X', 'hr': 'H',
+                'area_manager': 'A', 'branch_manager': 'B', 'educator': 'E',
+            }
+            prefix = prefix_map.get(self.role, 'U')
+            count = Users.objects.filter(role=self.role).count() + 1
+            name_slug = slugify(self.first_name).replace('-', '')[:15]
+            self.unique_lms_id = f"{prefix}{count}-{name_slug}"
+        if self.role in ('hr', 'executive_hr'):
+            self.is_protected = True
+        if self.role == 'executive_hr':
+            self.is_hr_executive = True
+        super().save(*args, **kwargs)
 
     class Meta:
         managed = True

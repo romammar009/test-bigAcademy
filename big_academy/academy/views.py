@@ -122,13 +122,15 @@ def login(request):
 
     return Response({
         'token': token.key,
-        'user': {
+'user': {
             'id':               academy_user.id,
             'email':            academy_user.email,
             'first_name':       academy_user.first_name,
             'last_name':        academy_user.last_name,
             'role':             academy_user.role,
             'is_hr_executive':  academy_user.is_hr_executive,
+            'unique_lms_id':    academy_user.unique_lms_id,
+            'is_protected':     academy_user.is_protected,
             'location':         academy_user.location.name if academy_user.location else None,
         }
     }, status=status.HTTP_200_OK)
@@ -260,9 +262,11 @@ def offboard_user(request, user_id):
     except Users.DoesNotExist:
         return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-    if user_to_offboard.email == request.user.username:
-        return Response({'error': 'You cannot offboard yourself.'}, status=status.HTTP_400_BAD_REQUEST)
-
+if user_to_offboard.is_protected:
+        return Response(
+            {'error': 'This account is protected and cannot be offboarded.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
     # Only HR executives can offboard other HR users
     if user_to_offboard.role == 'hr' and not academy_user.is_hr_executive:
         return Response(

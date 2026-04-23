@@ -90,14 +90,8 @@ class CourseModuleSerializer(serializers.ModelSerializer):
         return LessonSerializer(lessons, many=True).data
 
     def get_quizzes(self, module):
-        course      = module.course
-        all_modules = list(CourseModules.objects.filter(
-            course=course
-        ).order_by('sort_order'))
-        if all_modules and all_modules[-1].id == module.id:
-            quizzes = Quizzes.objects.filter(course=course)
-            return QuizSerializer(quizzes, many=True).data
-        return []
+      quizzes = Quizzes.objects.filter(module=module)
+      return QuizSerializer(quizzes, many=True).data
 
 
 class CourseSerializer(serializers.ModelSerializer):
@@ -113,9 +107,11 @@ class CourseSerializer(serializers.ModelSerializer):
 
 
 class CourseCreateSerializer(serializers.ModelSerializer):
+    version = serializers.CharField(max_length=20, required=False, default='1.0')
+
     class Meta:
         model = Courses
-        fields = ['status', 'title', 'description', 'version', 'estimated_minutes', 'expiry_months']
+        fields = ['title', 'description', 'version', 'estimated_minutes', 'expiry_months']
 
 
 class ModuleCreateSerializer(serializers.ModelSerializer):

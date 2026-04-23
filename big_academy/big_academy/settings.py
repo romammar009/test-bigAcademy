@@ -29,10 +29,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = os.getenv('DEBUG', 'True') == 'False'
 
 # who is allowed to access this site
-ALLOWED_HOSTS = ['67.219.109`.30', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['academy.bigchildcare.com', '67.219.109.30', 'localhost', '127.0.0.1']
 
 
 # Application definition
@@ -142,8 +142,8 @@ STATIC_URL = 'static/'
 # It tells Django to put static files in a folder named 'staticfiles' in your main project directory.
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 # Extra places to look for files (like your React build)
-_FRONTEND_STATIC = os.path.join(BASE_DIR, 'frontend/build/static')
-STATICFILES_DIRS = [_FRONTEND_STATIC] if os.path.isdir(_FRONTEND_STATIC) else []
+_frontend_build_static = os.path.join(BASE_DIR, 'frontend/build/static')
+STATICFILES_DIRS = [_frontend_build_static] if os.path.isdir(_frontend_build_static) else []
 
 
 REST_FRAMEWORK = {
@@ -157,6 +157,7 @@ REST_FRAMEWORK = {
 
 
 CORS_ALLOWED_ORIGINS = [
+    'https://academy.bigchildcare.com',
     'http://67.219.109.30',
     'http://localhost:3000',
     'http://127.0.0.1:8000',

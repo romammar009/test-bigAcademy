@@ -1,15 +1,23 @@
-import datetime
 import random
+import uuid
+from io import BytesIO
 
 import bcrypt
-from django.shortcuts import get_object_or_404, render
+from dateutil.relativedelta import relativedelta
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.units import cm
+from reportlab.pdfgen import canvas as pdf_canvas
+from rest_framework import status
+from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.authtoken.models import Token
 from django.contrib.auth.models import User as DjangoUser
+from django.db.models import Count, F
 from .models import QuizAttempts, QuizAnswers, QuizUnlockRequests, Notifications, SuperAdminLocations
 from .models import (
     Users, Enrolments, Courses, Assignments,
@@ -25,14 +33,14 @@ from .emails import (
     send_assignment_reminder_email,
 )
 from .serializers import (
-    UserSerializer, RegisterUserSerializer, EnrolmentSerializer,
+    UserSerializer, RegisterUserSerializer,
     CourseSerializer, CourseCreateSerializer,
     CourseModuleSerializer, ModuleCreateSerializer,
     LessonSerializer, LessonCreateSerializer,
     QuizSerializer, QuizCreateSerializer,
     QuizQuestionSerializer, QuizQuestionCreateSerializer,
     QuizOptionSerializer, QuizOptionCreateSerializer,
-    EnrolmentDetailSerializer, LessonProgressSerializer,
+    EnrolmentDetailSerializer,
     CertificateSerializer,
 )
 
@@ -531,8 +539,12 @@ def quiz_create(request, course_id):
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    module_id = request.data.get('module_id')
+    module = CourseModules.objects.filter(id=module_id).first() if module_id else None
+
     quiz = Quizzes.objects.create(
         course            = course,
+        module            = module,
         title             = serializer.validated_data['title'],
         pass_mark_percent = serializer.validated_data['pass_mark_percent'],
         attempt_limit     = serializer.validated_data.get('attempt_limit', 3),
@@ -711,8 +723,8 @@ def complete_lesson(request, lesson_id):
     except Lessons.DoesNotExist:
         return Response({'error': 'Lesson not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-    enrolled = Enrolments.objects.filter(user=academy_user, course=lesson.course).exists()
-    if not enrolled:
+    enrolment = Enrolments.objects.filter(user=academy_user, course=lesson.course).first()
+    if not enrolment:
         return Response({'error': 'You are not enrolled in this course.'}, status=status.HTTP_403_FORBIDDEN)
 
     progress, created = LessonProgress.objects.get_or_create(
@@ -734,15 +746,22 @@ def complete_lesson(request, lesson_id):
         progress.updated_at       = timezone.now()
         progress.save()
 
+    if enrolment.status == 'not_started':
+        enrolment.status     = 'in_progress'
+        enrolment.started_at = timezone.now()
+        enrolment.updated_at = timezone.now()
+        enrolment.save()
+
     module          = lesson.module
     module_complete = False
 
     if module:
         all_lessons       = Lessons.objects.filter(module=module)
+        lesson_count      = all_lessons.count()
         completed_lessons = LessonProgress.objects.filter(
             user=academy_user, lesson__in=all_lessons, status='completed'
         ).count()
-        if completed_lessons == all_lessons.count():
+        if lesson_count > 0 and completed_lessons == lesson_count:
             module_complete = True
 
     course_complete   = False
@@ -751,14 +770,15 @@ def complete_lesson(request, lesson_id):
 
     for mod in all_modules:
         mod_lessons   = Lessons.objects.filter(module=mod)
+        mod_count     = mod_lessons.count()
         mod_completed = LessonProgress.objects.filter(
             user=academy_user, lesson__in=mod_lessons, status='completed'
         ).count()
-        if mod_completed == mod_lessons.count():
+        if mod_count > 0 and mod_completed == mod_count:
             completed_modules += 1
 
-        if completed_modules == all_modules.count():
-            course_complete = True
+    if all_modules.count() > 0 and completed_modules == all_modules.count():
+        course_complete = True
 
     return Response({
         'message':         f'Lesson "{lesson.title}" marked as complete.',
@@ -923,8 +943,6 @@ def submit_quiz_attempt(request, attempt_id):
                 course_version=quiz.course.version
             ).first()
             if not existing_cert:
-                import uuid
-                from dateutil.relativedelta import relativedelta
                 cert_uuid  = uuid.uuid4()
                 expires_at = None
                 if quiz.course.expiry_months:
@@ -1087,8 +1105,6 @@ def grade_short_answer_attempt(request, attempt_id):
                 course_version=attempt.quiz.course.version
             ).first()
             if not existing_cert:
-                import uuid
-                from dateutil.relativedelta import relativedelta
                 cert_uuid  = uuid.uuid4()
                 expires_at = None
                 if attempt.quiz.course.expiry_months:
@@ -1406,10 +1422,18 @@ def report_staff(request):
         in_progress = enrolments.filter(status='in_progress').count()
         not_started = enrolments.filter(status='not_started').count()
 
-        locked_quiz_count = QuizAttempts.objects.filter(
-            user=user,
-            passed=False,
-        ).values('quiz').distinct().count()
+        passed_quiz_ids = QuizAttempts.objects.filter(
+            user=user, passed=True
+        ).values_list('quiz_id', flat=True)
+        locked_quiz_count = (
+            QuizAttempts.objects
+            .filter(user=user, submitted_at__isnull=False, quiz__attempt_limit__isnull=False)
+            .exclude(quiz_id__in=passed_quiz_ids)
+            .values('quiz', 'quiz__attempt_limit')
+            .annotate(attempt_count=Count('id'))
+            .filter(attempt_count__gte=F('quiz__attempt_limit'))
+            .count()
+        )
 
         data.append({
             'user_id':         user.id,
@@ -1790,14 +1814,6 @@ def delete_assignment(request, assignment_id):
 # ============================================================
 # CERTIFICATE GENERATION
 # ============================================================
-import uuid
-from io import BytesIO
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib import colors
-from reportlab.lib.units import cm
-from reportlab.pdfgen import canvas as pdf_canvas
-from dateutil.relativedelta import relativedelta
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def generate_certificate(request, course_id):
@@ -1974,7 +1990,6 @@ def generate_certificate(request, course_id):
     pdf_bytes = buffer.getvalue()
     buffer.close()
 
-    from django.http import HttpResponse
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="certificate_{cert_uuid}.pdf"'
     return response

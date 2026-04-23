@@ -13,8 +13,8 @@ export default function BrowseCourses() {
   const [message, setMessage]     = useState({ text: '', type: '' });
 
   useEffect(() => {
-    API.get('/courses/browse/')
-      .then(res => setCourses(res.data))
+    API.get('/my-learning/')
+      .then(res => setCourses(res.data.filter(e => e.status === 'not_started')))
       .catch(err => console.error(err))
       .finally(() => setLoading(false));
   }, []);
@@ -22,8 +22,8 @@ export default function BrowseCourses() {
   const handleEnrol = async (courseId) => {
     setEnrolling(true);
     try {
-      await API.post(`/courses/${courseId}/enrol/`);
-      setCourses(courses.filter(c => c.id !== courseId));
+      await API.patch(`/enrolments/${courseId}/start/`);
+      setCourses(courses.filter(c => c.course.id !== courseId));
       setSelected(null);
       setMessage({ text: 'Successfully enrolled! Check My Learning tab.', type: 'success' });
     } catch (err) {

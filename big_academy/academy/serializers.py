@@ -107,7 +107,10 @@ class CourseSerializer(serializers.ModelSerializer):
 
 
 class CourseCreateSerializer(serializers.ModelSerializer):
-    version = serializers.CharField(max_length=20, required=False, default='1.0')
+    status         = serializers.CharField(required=False)
+    version        = serializers.CharField(required=False, default='1.0')
+    estimated_minutes = serializers.IntegerField(required=False, allow_null=True)
+    expiry_months     = serializers.IntegerField(required=False, allow_null=True)
 
     class Meta:
         model = Courses

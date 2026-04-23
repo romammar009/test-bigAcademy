@@ -25,6 +25,13 @@ from .models import (
     QuizQuestions, QuizOptions,
     LessonProgress, Certificates
 )
+from .emails import (
+    send_welcome_email,
+    send_certificate_email,
+    send_unlock_approved_email,
+    send_unlock_denied_email,
+    send_assignment_reminder_email,
+)
 from .serializers import (
     UserSerializer, RegisterUserSerializer,
     CourseSerializer, CourseCreateSerializer,
@@ -237,6 +244,8 @@ def register_user(request):
             updated_at = timezone.now(),
         )
         enrolments_created.append(assignment.course.title)
+
+    send_welcome_email(new_user, raw_password, enrolments_created)
 
     return Response({
         'message':          f"{new_user.first_name} {new_user.last_name} successfully onboarded.",
@@ -648,6 +657,43 @@ def browse_courses(request):
 
     return Response(data, status=status.HTTP_200_OK)
 
+# ============================================================
+# ASSIGNMENTS PREVIEW
+# ============================================================
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def preview_assignment_users(request):
+    academy_user = get_academy_user(request)
+    if not academy_user or academy_user.role not in CONTENT_ROLES:
+        return Response({'error': 'Access denied.'}, status=403)
+
+    location_ids = request.data.get('location_ids', [])
+    roles        = request.data.get('roles', [])
+
+    users = Users.objects.filter(status='active')
+
+    if academy_user.role == 'area_manager':
+        assigned_location_ids = SuperAdminLocations.objects.filter(
+            user=academy_user
+        ).values_list('location_id', flat=True)
+        users = users.filter(location_id__in=assigned_location_ids)
+
+    if location_ids:
+        users = users.filter(location_id__in=location_ids)
+
+    if roles:
+        users = users.filter(role__in=roles)
+    else:
+        users = users.filter(role__in=['educator', 'branch_manager'])
+
+    data = [{
+        'id':       u.id,
+        'name':     f"{u.first_name} {u.last_name}",
+        'role':     u.role,
+        'location': u.location.name if u.location else '—',
+    } for u in users]
+
+    return Response({'users': data}, status=200)
 
 # ============================================================
 # SELF ENROL IN A COURSE
@@ -938,7 +984,7 @@ def submit_quiz_attempt(request, attempt_id):
                 expires_at = None
                 if quiz.course.expiry_months:
                     expires_at = timezone.now() + relativedelta(months=quiz.course.expiry_months)
-                Certificates.objects.create(
+                new_cert = Certificates.objects.create(
                     certificate_id = cert_uuid,
                     user           = academy_user,
                     course         = quiz.course,
@@ -953,6 +999,7 @@ def submit_quiz_attempt(request, attempt_id):
                     title      = 'Certificate Issued 🎓',
                     message    = f'Congratulations! Your certificate for "{quiz.course.title}" is now available in your Certificates tab.'
                 )
+                send_certificate_email(academy_user, quiz.course, new_cert)
         except Enrolments.DoesNotExist:
             pass
 
@@ -1099,7 +1146,7 @@ def grade_short_answer_attempt(request, attempt_id):
                 expires_at = None
                 if attempt.quiz.course.expiry_months:
                     expires_at = timezone.now() + relativedelta(months=attempt.quiz.course.expiry_months)
-                Certificates.objects.create(
+                graded_cert = Certificates.objects.create(
                     certificate_id = cert_uuid,
                     user           = attempt.user,
                     course         = attempt.quiz.course,
@@ -1114,6 +1161,7 @@ def grade_short_answer_attempt(request, attempt_id):
                     title      = 'Certificate Issued 🎓',
                     message    = f'Congratulations! Your certificate for "{attempt.quiz.course.title}" is now available in your Certificates tab.'
                 )
+                send_certificate_email(attempt.user, attempt.quiz.course, graded_cert)
         except Enrolments.DoesNotExist:
             pass
 
@@ -1244,6 +1292,11 @@ def review_unlock_request(request, request_id):
         message    = f'Your unlock request for "{unlock_request.quiz.title}" has been {new_status}.' +
                      (f' Note: {review_note}' if review_note else '')
     )
+
+    if new_status == 'approved':
+        send_unlock_approved_email(unlock_request.user, unlock_request.quiz, review_note)
+    else:
+        send_unlock_denied_email(unlock_request.user, unlock_request.quiz, review_note)
 
     return Response({
         'message':     f'Unlock request {new_status}.',
@@ -1696,73 +1749,90 @@ def list_assignments(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_assignment(request):
-    academy_user = get_academy_user(request)
-    if not academy_user or academy_user.role not in CONTENT_ROLES:
-        return Response({'error': 'Access denied.'}, status=403)
-
-    course_id       = request.data.get('course_id')
-    assignment_type = request.data.get('assignment_type', 'all')
-    target_value    = request.data.get('target_value', '')
-    mandatory       = request.data.get('mandatory', True)
-    due_at          = request.data.get('due_at')
-
+    print("CREATE ASSIGNMENT CALLED", request.data)
     try:
-        course = Courses.objects.get(id=course_id)
-    except Courses.DoesNotExist:
-        return Response({'error': 'Course not found.'}, status=404)
+        academy_user = get_academy_user(request)
+        if not academy_user or academy_user.role not in CONTENT_ROLES:
+            return Response({'error': 'Access denied.'}, status=403)
 
-    existing = Assignments.objects.filter(
-        course=course,
-        assignment_type=assignment_type,
-        target_value=target_value
-    ).exists()
-    if existing:
-        return Response({'error': 'This assignment already exists.'}, status=400)
+        course_id       = request.data.get('course_id')
+        assignment_type = request.data.get('assignment_type', 'all')
+        target_users    = request.data.get('target_users', [])
+        target_value    = request.data.get('target_value', '')
+        mandatory       = request.data.get('mandatory', True)
+        due_at          = request.data.get('due_at')
 
-    assignment = Assignments.objects.create(
-        course          = course,
-        assignment_type = assignment_type,
-        target_value    = target_value,
-        mandatory       = mandatory,
-        due_at          = due_at,
-        created_by      = academy_user,
-        created_at      = timezone.now(),
-        updated_at      = timezone.now(),
-    )
-
-    if assignment_type == 'all':
-        users = Users.objects.filter(status='active', location=academy_user.location)
-    elif assignment_type == 'user':
         try:
-            specific_user = Users.objects.get(id=int(target_value), status='active')
-            users = [specific_user]
-        except Users.DoesNotExist:
-            users = []
-    else:
-        users = Users.objects.filter(role=target_value, status='active', location=academy_user.location)
+            course = Courses.objects.get(id=course_id)
+        except Courses.DoesNotExist:
+            return Response({'error': 'Course not found.'}, status=404)
 
-    for user in users:
-        already_enrolled = Enrolments.objects.filter(user=user, course=course).exists()
-        if not already_enrolled:
-            Enrolments.objects.create(
-                user       = user,
-                course     = course,
-                source     = 'assignment',
-                status     = 'not_started',
-                created_at = timezone.now(),
-                updated_at = timezone.now(),
-            )
+        assignment = Assignments.objects.create(
+            course          = course,
+            assignment_type = assignment_type,
+            target_value    = target_value,
+            mandatory       = mandatory,
+            due_at          = due_at,
+            created_by      = academy_user,
+            created_at      = timezone.now(),
+            updated_at      = timezone.now(),
+        )
 
-    return Response({
-        'message': 'Course assigned successfully.',
-        'assignment': {
-            'id':              assignment.id,
-            'course_title':    course.title,
-            'assignment_type': assignment_type,
-            'target_value':    target_value,
-            'mandatory':       mandatory,
-        }
-    }, status=201)
+        if assignment_type == 'all':
+            if academy_user.role == 'area_manager':
+                assigned_location_ids = SuperAdminLocations.objects.filter(
+                    user=academy_user
+                ).values_list('location_id', flat=True)
+                users = Users.objects.filter(
+                    status='active',
+                    location_id__in=assigned_location_ids,
+                    role__in=['educator', 'branch_manager']
+                )
+            else:
+                users = Users.objects.filter(
+                    status='active',
+                    role__in=['educator', 'branch_manager', 'area_manager']
+                )
+        elif assignment_type == 'filtered':
+            users = Users.objects.filter(id__in=target_users, status='active')
+        elif assignment_type == 'user':
+            try:
+                specific_user = Users.objects.get(id=int(target_value), status='active')
+                users = [specific_user]
+            except Users.DoesNotExist:
+                users = []
+        else:
+            users = Users.objects.filter(role=target_value, status='active')
+
+        enrolled_count = 0
+        for user in users:
+            already_enrolled = Enrolments.objects.filter(user=user, course=course).exists()
+            if not already_enrolled:
+                Enrolments.objects.create(
+                    user       = user,
+                    course     = course,
+                    source     = 'assignment',
+                    status     = 'not_started',
+                    created_at = timezone.now(),
+                    updated_at = timezone.now(),
+                )
+                enrolled_count += 1
+
+        return Response({
+            'message': f'Course assigned successfully to {enrolled_count} user(s).',
+            'assignment': {
+                'id':              assignment.id,
+                'course_title':    course.title,
+                'assignment_type': assignment_type,
+                'mandatory':       mandatory,
+            }
+        }, status=201)
+
+    except Exception as e:
+        print("ERROR IN CREATE ASSIGNMENT:", str(e))
+        import traceback
+        traceback.print_exc()
+        return Response({'error': str(e)}, status=500)
 
 
 @api_view(['DELETE'])
@@ -1851,55 +1921,115 @@ def generate_certificate(request, course_id):
     c      = pdf_canvas.Canvas(buffer, pagesize=landscape(A4))
     width, height = landscape(A4)
 
-    c.setFillColor(colors.HexColor('#f9f6f0'))
+    NAVY   = colors.HexColor('#1a237e')
+    GOLD   = colors.HexColor('#ffd700')
+    RED    = colors.HexColor('#cc2200')
+    WHITE  = colors.white
+    LIGHT  = colors.HexColor('#e8eaf6')
+
+    # Navy background
+    c.setFillColor(NAVY)
     c.rect(0, 0, width, height, fill=1, stroke=0)
 
-    c.setStrokeColor(colors.HexColor('#2c5f2e'))
-    c.setLineWidth(4)
-    c.rect(1*cm, 1*cm, width - 2*cm, height - 2*cm, fill=0, stroke=1)
+    # Gold diagonal accent top-right
+    from reportlab.lib.utils import simpleSplit
+    p = c.beginPath()
+    p.moveTo(width * 0.55, height)
+    p.lineTo(width, height)
+    p.lineTo(width, height * 0.35)
+    p.close()
+    c.setFillColor(colors.HexColor('#283593'))
+    c.drawPath(p, fill=1, stroke=0)
 
+    # Gold border lines
+    c.setStrokeColor(GOLD)
+    c.setLineWidth(3)
+    c.rect(1.2*cm, 1.2*cm, width - 2.4*cm, height - 2.4*cm, fill=0, stroke=1)
     c.setLineWidth(1)
-    c.rect(1.3*cm, 1.3*cm, width - 2.6*cm, height - 2.6*cm, fill=0, stroke=1)
+    c.rect(1.6*cm, 1.6*cm, width - 3.2*cm, height - 3.2*cm, fill=0, stroke=1)
 
-    c.setFillColor(colors.HexColor('#2c5f2e'))
-    c.setFont('Helvetica-Bold', 28)
-    c.drawCentredString(width / 2, height - 3.5*cm, 'Big Childcare')
+    # White content area (centre panel)
+    c.setFillColor(colors.HexColor('#f0f2ff'))
+    c.roundRect(3.5*cm, 2.5*cm, width - 7*cm, height - 5*cm, 8, fill=1, stroke=0)
 
-    c.setFont('Helvetica-Bold', 22)
-    c.setFillColor(colors.HexColor('#1a1a1a'))
-    c.drawCentredString(width / 2, height - 5*cm, 'Certificate of Completion')
+    # "big" logo text — navy
+    c.setFillColor(NAVY)
+    c.setFont('Helvetica-Bold', 36)
+    c.drawCentredString(width / 2, height - 3.2*cm, 'big')
 
-    c.setStrokeColor(colors.HexColor('#2c5f2e'))
+    # "CHILDCARE" in red
+    c.setFillColor(RED)
+    c.setFont('Helvetica-Bold', 16)
+    c.drawCentredString(width / 2, height - 4.1*cm, 'C H I L D C A R E')
+
+    # Gold divider
+    c.setStrokeColor(GOLD)
     c.setLineWidth(1.5)
-    c.line(4*cm, height - 5.7*cm, width - 4*cm, height - 5.7*cm)
+    c.line(width/2 - 6*cm, height - 4.6*cm, width/2 + 6*cm, height - 4.6*cm)
 
-    c.setFont('Helvetica', 14)
-    c.setFillColor(colors.HexColor('#555555'))
-    c.drawCentredString(width / 2, height - 7*cm, 'This certifies that')
-
-    full_name = f"{academy_user.first_name} {academy_user.last_name}"
-    c.setFont('Helvetica-Bold', 26)
-    c.setFillColor(colors.HexColor('#2c5f2e'))
-    c.drawCentredString(width / 2, height - 8.5*cm, full_name)
-
-    c.setFont('Helvetica', 14)
-    c.setFillColor(colors.HexColor('#555555'))
-    c.drawCentredString(width / 2, height - 10*cm, 'has successfully completed')
-
+    # "CERTIFICATE OF COMPLETION"
+    c.setFillColor(NAVY)
     c.setFont('Helvetica-Bold', 18)
-    c.setFillColor(colors.HexColor('#1a1a1a'))
-    c.drawCentredString(width / 2, height - 11.5*cm, course.title)
+    c.drawCentredString(width / 2, height - 5.5*cm, 'CERTIFICATE OF COMPLETION')
 
-    c.setFont('Helvetica', 12)
+    # "THIS CERTIFICATE IS PROUDLY PRESENTED TO:"
     c.setFillColor(colors.HexColor('#555555'))
+    c.setFont('Helvetica', 11)
+    c.drawCentredString(width / 2, height - 6.5*cm, 'THIS CERTIFICATE IS PROUDLY PRESENTED TO:')
+
+    # Recipient name in gold
+    full_name = f"{academy_user.first_name} {academy_user.last_name}"
+    c.setFillColor(GOLD)
+    c.setFont('Helvetica-Bold', 30)
+    c.drawCentredString(width / 2, height - 8*cm, full_name)
+
+    # Gold name underline
+    c.setStrokeColor(GOLD)
+    c.setLineWidth(1)
+    c.line(width/2 - 7*cm, height - 8.5*cm, width/2 + 7*cm, height - 8.5*cm)
+
+    # "has completed"
+    c.setFillColor(colors.HexColor('#333333'))
+    c.setFont('Helvetica', 12)
+    c.drawCentredString(width / 2, height - 9.3*cm, 'has successfully completed the following course:')
+
+    # Course title in navy bold
+    c.setFillColor(NAVY)
+    c.setFont('Helvetica-Bold', 16)
+    c.drawCentredString(width / 2, height - 10.4*cm, course.title)
+
+    # Dates
     completion_date = enrolment.completed_at.strftime('%d %B %Y')
-    c.drawCentredString(width / 2, height - 13*cm, f'Completed: {completion_date}')
-
+    c.setFillColor(colors.HexColor('#555555'))
+    c.setFont('Helvetica', 11)
+    c.drawCentredString(width / 2, height - 11.4*cm, f'Completed: {completion_date}')
     if expires_at:
-        c.drawCentredString(width / 2, height - 13.8*cm, f'Valid until: {expires_at.strftime("%d %B %Y")}')
+        c.drawCentredString(width / 2, height - 12.1*cm, f'Valid until: {expires_at.strftime("%d %B %Y")}')
 
+    # Gold divider before signatures
+    c.setStrokeColor(GOLD)
+    c.setLineWidth(1)
+    c.line(4.5*cm, 4.2*cm, width/2 - 1*cm, 4.2*cm)
+    c.line(width/2 + 1*cm, 4.2*cm, width - 4.5*cm, 4.2*cm)
+
+    # Signature labels
+    c.setFillColor(NAVY)
+    c.setFont('Helvetica-Bold', 10)
+    c.drawCentredString(width * 0.28, 3.7*cm, 'Rob Miller')
     c.setFont('Helvetica', 9)
-    c.setFillColor(colors.HexColor('#999999'))
+    c.setFillColor(colors.HexColor('#555555'))
+    c.drawCentredString(width * 0.28, 3.2*cm, 'TRAINING AND PARTNERSHIPS')
+
+    c.setFillColor(NAVY)
+    c.setFont('Helvetica-Bold', 10)
+    c.drawCentredString(width * 0.72, 3.7*cm, 'Big Childcare Academy')
+    c.setFont('Helvetica', 9)
+    c.setFillColor(colors.HexColor('#555555'))
+    c.drawCentredString(width * 0.72, 3.2*cm, 'EDUCATIONAL INSTITUTION')
+
+    # Certificate ID at bottom
+    c.setFont('Helvetica', 8)
+    c.setFillColor(colors.HexColor('#9fa8da'))
     c.drawCentredString(width / 2, 2.2*cm, f'Certificate ID: {cert_uuid}')
 
     c.setStrokeColor(colors.HexColor('#1a1a1a'))

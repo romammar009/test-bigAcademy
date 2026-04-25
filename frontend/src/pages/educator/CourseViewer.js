@@ -153,8 +153,10 @@ export default function CourseViewer({ enrolment, onBack }) {
 
   const renderLessonContent = (lesson) => {
     if (lesson.content_type === 'video') return (
-      <div style={{ aspectRatio: '16/9', marginBottom: '16px' }}>
-        <iframe src={lesson.content_url} title={lesson.title} allowFullScreen style={{ width: '100%', height: '100%', borderRadius: '8px', border: 'none' }} />
+      <div style={{ marginBottom: '16px' }}>
+        {console.log('VIDEO URL:', lesson.content_url)}
+        <video controls style={{ width: '100%', borderRadius: '8px' }}
+          src={`http://localhost:8000${lesson.content_url}`} />
       </div>
     );
     if (lesson.content_type === 'pdf') return (
@@ -163,6 +165,14 @@ export default function CourseViewer({ enrolment, onBack }) {
     if (lesson.content_type === 'text' || lesson.content_type === 'article') return (
       <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px', marginBottom: '16px', lineHeight: 1.7, color: '#334155' }}
         dangerouslySetInnerHTML={{ __html: lesson.content_url }} />
+    );
+    if (lesson.content_type === 'ppt') return (
+      <iframe src={`https://docs.google.com/viewer?url=${encodeURIComponent('http://localhost:8000' + lesson.content_url)}&embedded=true`} width="100%" height="500px" style={{ borderRadius: '8px', border: 'none', marginBottom: '16px' }} />
+    );
+    if (lesson.content_type === 'youtube') return (
+      <div style={{ aspectRatio: '16/9', marginBottom: '16px' }}>
+        <iframe src={lesson.content_url} title={lesson.title} allowFullScreen style={{ width: '100%', height: '100%', borderRadius: '8px', border: 'none' }} />
+      </div>
     );
     return <p style={{ color: '#94a3b8' }}>No content available.</p>;
   };

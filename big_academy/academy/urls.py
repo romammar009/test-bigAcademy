@@ -24,6 +24,7 @@ urlpatterns = [
 
     # LESSONS
     path('modules/<int:module_id>/lessons/',   views.lesson_create,  name='lesson-create'),
+    path('lessons/upload/', views.lesson_file_upload, name='lesson-upload'),
 
     # QUIZZES
     path('courses/<int:course_id>/quizzes/',   views.quiz_create,    name='quiz-create'),

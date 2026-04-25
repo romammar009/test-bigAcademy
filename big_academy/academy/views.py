@@ -1525,6 +1525,37 @@ def course_progress(request, course_id):
         'completed_lesson_ids': completed_lesson_ids,
     }, status=200)
 
+# ============================================================
+# FILE UPLOAD FOR LESSONS
+# ============================================================
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def lesson_file_upload(request):
+    academy_user = get_academy_user(request)
+    if not academy_user or academy_user.role not in CONTENT_ROLES:
+        return Response({'error': 'Access denied.'}, status=403)
+
+    file         = request.FILES.get('file')
+    content_type = request.data.get('content_type')
+
+    if not file:
+        return Response({'error': 'No file provided.'}, status=400)
+
+    import os
+    from django.core.files.storage import default_storage
+    from django.core.files.base import ContentFile
+
+    folder_map = {
+        'video': 'videos',
+        'pdf':   'pdfs',
+        'ppt':   'ppts',
+    }
+    folder   = folder_map.get(content_type, 'uploads')
+    filename = f"{folder}/{uuid.uuid4()}_{file.name}"
+    path     = default_storage.save(filename, ContentFile(file.read()))
+    url      = f"/media/{path}"
+
+    return Response({'url': url, 'filename': file.name}, status=200)
 
 # ============================================================
 # QUIZ — Get last attempt answers

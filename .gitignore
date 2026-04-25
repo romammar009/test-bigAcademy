@@ -10,4 +10,4 @@ dist/
 *.log
 .DS_Store
 .claude/
-.vscode/
+.vscode/big_academy/staticfiles/

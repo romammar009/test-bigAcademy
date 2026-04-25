@@ -5,21 +5,18 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import API from '../../api/axios';
 import NotificationBell from '../../components/NotificationBell';
 import logo from '../../BigChildcare-Logo.png';
-import BrowseCourses from '../educator/AssignedCourses';
 import MyLearning from '../educator/MyLearning';
 import MyCertificates from '../educator/MyCertificates';
 import {
   LayoutDashboard, BookOpen, GraduationCap, Award,
   LogOut, ChevronLeft, ChevronRight,
-  BookMarked, PlayCircle, CheckCircle, Bell,
+  BookMarked, PlayCircle, CheckCircle,
 } from 'lucide-react';
 
 const SIDEBAR_ITEMS = [
   { key: 'dashboard',     icon: LayoutDashboard, label: 'Dashboard'        },
-  { key: 'courses',       icon: BookOpen,        label: 'Assigned Courses' },
   { key: 'learning',      icon: GraduationCap,   label: 'My Learning'      },
   { key: 'certificates',  icon: Award,           label: 'Certificates'     },
-  { key: 'notifications', icon: Bell,            label: 'Notifications'    },
 ];
 
 export default function AdminDashboard() {
@@ -307,7 +304,6 @@ export default function AdminDashboard() {
 
         <div style={S.content}>
           {activeTab === 'dashboard'     && <HomeDashboard />}
-          {activeTab === 'courses'       && <BrowseCourses />}
           {activeTab === 'learning'      && <MyLearning />}
           {activeTab === 'certificates'  && <MyCertificates />}
           {activeTab === 'notifications' && <NotificationsPage />}

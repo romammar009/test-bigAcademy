@@ -70,7 +70,7 @@ export default function HRDashboard() {
   const handleLogout = async () => {
     try { await API.post('/auth/logout/'); } catch (err) {}
     logout();
-    navigate('/bigacademy-login2026');
+    navigate('/login');
   };
 
   const S = {

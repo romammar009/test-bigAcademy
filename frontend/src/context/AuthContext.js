@@ -38,7 +38,7 @@ export function AuthProvider({ children }) {
   };
 
   const getRedirectPath = (role) => {
-    return ROLE_REDIRECTS[role] || '/bigacademy-login2026';
+    return ROLE_REDIRECTS[role] || '/login';
   };
 
   return (

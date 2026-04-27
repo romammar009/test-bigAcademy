@@ -25,6 +25,13 @@ from .models import (
     QuizQuestions, QuizOptions,
     LessonProgress, Certificates
 )
+from .emails import (
+    send_welcome_email,
+    send_certificate_email,
+    send_unlock_approved_email,
+    send_unlock_denied_email,
+    send_assignment_reminder_email,
+)
 from .serializers import (
     UserSerializer, RegisterUserSerializer,
     CourseSerializer, CourseCreateSerializer,
@@ -237,6 +244,8 @@ def register_user(request):
             updated_at = timezone.now(),
         )
         enrolments_created.append(assignment.course.title)
+
+    send_welcome_email(new_user, raw_password, enrolments_created)
 
     return Response({
         'message':          f"{new_user.first_name} {new_user.last_name} successfully onboarded.",
@@ -975,7 +984,7 @@ def submit_quiz_attempt(request, attempt_id):
                 expires_at = None
                 if quiz.course.expiry_months:
                     expires_at = timezone.now() + relativedelta(months=quiz.course.expiry_months)
-                Certificates.objects.create(
+                new_cert = Certificates.objects.create(
                     certificate_id = cert_uuid,
                     user           = academy_user,
                     course         = quiz.course,
@@ -990,6 +999,7 @@ def submit_quiz_attempt(request, attempt_id):
                     title      = 'Certificate Issued 🎓',
                     message    = f'Congratulations! Your certificate for "{quiz.course.title}" is now available in your Certificates tab.'
                 )
+                send_certificate_email(academy_user, quiz.course, new_cert)
         except Enrolments.DoesNotExist:
             pass
 
@@ -1136,7 +1146,7 @@ def grade_short_answer_attempt(request, attempt_id):
                 expires_at = None
                 if attempt.quiz.course.expiry_months:
                     expires_at = timezone.now() + relativedelta(months=attempt.quiz.course.expiry_months)
-                Certificates.objects.create(
+                graded_cert = Certificates.objects.create(
                     certificate_id = cert_uuid,
                     user           = attempt.user,
                     course         = attempt.quiz.course,
@@ -1151,6 +1161,7 @@ def grade_short_answer_attempt(request, attempt_id):
                     title      = 'Certificate Issued 🎓',
                     message    = f'Congratulations! Your certificate for "{attempt.quiz.course.title}" is now available in your Certificates tab.'
                 )
+                send_certificate_email(attempt.user, attempt.quiz.course, graded_cert)
         except Enrolments.DoesNotExist:
             pass
 
@@ -1281,6 +1292,11 @@ def review_unlock_request(request, request_id):
         message    = f'Your unlock request for "{unlock_request.quiz.title}" has been {new_status}.' +
                      (f' Note: {review_note}' if review_note else '')
     )
+
+    if new_status == 'approved':
+        send_unlock_approved_email(unlock_request.user, unlock_request.quiz, review_note)
+    else:
+        send_unlock_denied_email(unlock_request.user, unlock_request.quiz, review_note)
 
     return Response({
         'message':     f'Unlock request {new_status}.',
@@ -1509,6 +1525,37 @@ def course_progress(request, course_id):
         'completed_lesson_ids': completed_lesson_ids,
     }, status=200)
 
+# ============================================================
+# FILE UPLOAD FOR LESSONS
+# ============================================================
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def lesson_file_upload(request):
+    academy_user = get_academy_user(request)
+    if not academy_user or academy_user.role not in CONTENT_ROLES:
+        return Response({'error': 'Access denied.'}, status=403)
+
+    file         = request.FILES.get('file')
+    content_type = request.data.get('content_type')
+
+    if not file:
+        return Response({'error': 'No file provided.'}, status=400)
+
+    import os
+    from django.core.files.storage import default_storage
+    from django.core.files.base import ContentFile
+
+    folder_map = {
+        'video': 'videos',
+        'pdf':   'pdfs',
+        'ppt':   'ppts',
+    }
+    folder   = folder_map.get(content_type, 'uploads')
+    filename = f"{folder}/{uuid.uuid4()}_{file.name}"
+    path     = default_storage.save(filename, ContentFile(file.read()))
+    url      = f"/media/{path}"
+
+    return Response({'url': url, 'filename': file.name}, status=200)
 
 # ============================================================
 # QUIZ — Get last attempt answers
@@ -1905,55 +1952,115 @@ def generate_certificate(request, course_id):
     c      = pdf_canvas.Canvas(buffer, pagesize=landscape(A4))
     width, height = landscape(A4)
 
-    c.setFillColor(colors.HexColor('#f9f6f0'))
+    NAVY   = colors.HexColor('#1a237e')
+    GOLD   = colors.HexColor('#ffd700')
+    RED    = colors.HexColor('#cc2200')
+    WHITE  = colors.white
+    LIGHT  = colors.HexColor('#e8eaf6')
+
+    # Navy background
+    c.setFillColor(NAVY)
     c.rect(0, 0, width, height, fill=1, stroke=0)
 
-    c.setStrokeColor(colors.HexColor('#2c5f2e'))
-    c.setLineWidth(4)
-    c.rect(1*cm, 1*cm, width - 2*cm, height - 2*cm, fill=0, stroke=1)
+    # Gold diagonal accent top-right
+    from reportlab.lib.utils import simpleSplit
+    p = c.beginPath()
+    p.moveTo(width * 0.55, height)
+    p.lineTo(width, height)
+    p.lineTo(width, height * 0.35)
+    p.close()
+    c.setFillColor(colors.HexColor('#283593'))
+    c.drawPath(p, fill=1, stroke=0)
 
+    # Gold border lines
+    c.setStrokeColor(GOLD)
+    c.setLineWidth(3)
+    c.rect(1.2*cm, 1.2*cm, width - 2.4*cm, height - 2.4*cm, fill=0, stroke=1)
     c.setLineWidth(1)
-    c.rect(1.3*cm, 1.3*cm, width - 2.6*cm, height - 2.6*cm, fill=0, stroke=1)
+    c.rect(1.6*cm, 1.6*cm, width - 3.2*cm, height - 3.2*cm, fill=0, stroke=1)
 
-    c.setFillColor(colors.HexColor('#2c5f2e'))
-    c.setFont('Helvetica-Bold', 28)
-    c.drawCentredString(width / 2, height - 3.5*cm, 'Big Childcare')
+    # White content area (centre panel)
+    c.setFillColor(colors.HexColor('#f0f2ff'))
+    c.roundRect(3.5*cm, 2.5*cm, width - 7*cm, height - 5*cm, 8, fill=1, stroke=0)
 
-    c.setFont('Helvetica-Bold', 22)
-    c.setFillColor(colors.HexColor('#1a1a1a'))
-    c.drawCentredString(width / 2, height - 5*cm, 'Certificate of Completion')
+    # "big" logo text — navy
+    c.setFillColor(NAVY)
+    c.setFont('Helvetica-Bold', 36)
+    c.drawCentredString(width / 2, height - 3.2*cm, 'big')
 
-    c.setStrokeColor(colors.HexColor('#2c5f2e'))
+    # "CHILDCARE" in red
+    c.setFillColor(RED)
+    c.setFont('Helvetica-Bold', 16)
+    c.drawCentredString(width / 2, height - 4.1*cm, 'C H I L D C A R E')
+
+    # Gold divider
+    c.setStrokeColor(GOLD)
     c.setLineWidth(1.5)
-    c.line(4*cm, height - 5.7*cm, width - 4*cm, height - 5.7*cm)
+    c.line(width/2 - 6*cm, height - 4.6*cm, width/2 + 6*cm, height - 4.6*cm)
 
-    c.setFont('Helvetica', 14)
-    c.setFillColor(colors.HexColor('#555555'))
-    c.drawCentredString(width / 2, height - 7*cm, 'This certifies that')
-
-    full_name = f"{academy_user.first_name} {academy_user.last_name}"
-    c.setFont('Helvetica-Bold', 26)
-    c.setFillColor(colors.HexColor('#2c5f2e'))
-    c.drawCentredString(width / 2, height - 8.5*cm, full_name)
-
-    c.setFont('Helvetica', 14)
-    c.setFillColor(colors.HexColor('#555555'))
-    c.drawCentredString(width / 2, height - 10*cm, 'has successfully completed')
-
+    # "CERTIFICATE OF COMPLETION"
+    c.setFillColor(NAVY)
     c.setFont('Helvetica-Bold', 18)
-    c.setFillColor(colors.HexColor('#1a1a1a'))
-    c.drawCentredString(width / 2, height - 11.5*cm, course.title)
+    c.drawCentredString(width / 2, height - 5.5*cm, 'CERTIFICATE OF COMPLETION')
 
-    c.setFont('Helvetica', 12)
+    # "THIS CERTIFICATE IS PROUDLY PRESENTED TO:"
     c.setFillColor(colors.HexColor('#555555'))
+    c.setFont('Helvetica', 11)
+    c.drawCentredString(width / 2, height - 6.5*cm, 'THIS CERTIFICATE IS PROUDLY PRESENTED TO:')
+
+    # Recipient name in gold
+    full_name = f"{academy_user.first_name} {academy_user.last_name}"
+    c.setFillColor(GOLD)
+    c.setFont('Helvetica-Bold', 30)
+    c.drawCentredString(width / 2, height - 8*cm, full_name)
+
+    # Gold name underline
+    c.setStrokeColor(GOLD)
+    c.setLineWidth(1)
+    c.line(width/2 - 7*cm, height - 8.5*cm, width/2 + 7*cm, height - 8.5*cm)
+
+    # "has completed"
+    c.setFillColor(colors.HexColor('#333333'))
+    c.setFont('Helvetica', 12)
+    c.drawCentredString(width / 2, height - 9.3*cm, 'has successfully completed the following course:')
+
+    # Course title in navy bold
+    c.setFillColor(NAVY)
+    c.setFont('Helvetica-Bold', 16)
+    c.drawCentredString(width / 2, height - 10.4*cm, course.title)
+
+    # Dates
     completion_date = enrolment.completed_at.strftime('%d %B %Y')
-    c.drawCentredString(width / 2, height - 13*cm, f'Completed: {completion_date}')
-
+    c.setFillColor(colors.HexColor('#555555'))
+    c.setFont('Helvetica', 11)
+    c.drawCentredString(width / 2, height - 11.4*cm, f'Completed: {completion_date}')
     if expires_at:
-        c.drawCentredString(width / 2, height - 13.8*cm, f'Valid until: {expires_at.strftime("%d %B %Y")}')
+        c.drawCentredString(width / 2, height - 12.1*cm, f'Valid until: {expires_at.strftime("%d %B %Y")}')
 
+    # Gold divider before signatures
+    c.setStrokeColor(GOLD)
+    c.setLineWidth(1)
+    c.line(4.5*cm, 4.2*cm, width/2 - 1*cm, 4.2*cm)
+    c.line(width/2 + 1*cm, 4.2*cm, width - 4.5*cm, 4.2*cm)
+
+    # Signature labels
+    c.setFillColor(NAVY)
+    c.setFont('Helvetica-Bold', 10)
+    c.drawCentredString(width * 0.28, 3.7*cm, 'Rob Miller')
     c.setFont('Helvetica', 9)
-    c.setFillColor(colors.HexColor('#999999'))
+    c.setFillColor(colors.HexColor('#555555'))
+    c.drawCentredString(width * 0.28, 3.2*cm, 'TRAINING AND PARTNERSHIPS')
+
+    c.setFillColor(NAVY)
+    c.setFont('Helvetica-Bold', 10)
+    c.drawCentredString(width * 0.72, 3.7*cm, 'Big Childcare Academy')
+    c.setFont('Helvetica', 9)
+    c.setFillColor(colors.HexColor('#555555'))
+    c.drawCentredString(width * 0.72, 3.2*cm, 'EDUCATIONAL INSTITUTION')
+
+    # Certificate ID at bottom
+    c.setFont('Helvetica', 8)
+    c.setFillColor(colors.HexColor('#9fa8da'))
     c.drawCentredString(width / 2, 2.2*cm, f'Certificate ID: {cert_uuid}')
 
     c.setStrokeColor(colors.HexColor('#1a1a1a'))

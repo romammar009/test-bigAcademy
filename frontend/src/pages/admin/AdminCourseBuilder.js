@@ -37,6 +37,8 @@ export default function AdminCourseBuilder({ course, onBack }) {
   const [savingQuestion, setSavingQuestion]   = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [expandedQuiz, setExpandedQuiz]       = useState(null);
+  const [expandedLesson, setExpandedLesson] = useState(null);
+  const [expandedQuestion, setExpandedQuestion] = useState(null);
 
   const [activeOptionQuestion, setActiveOptionQuestion] = useState(null);
   const [optionForm, setOptionForm]                     = useState({ option_text: '', is_correct: false, sort_order: 1 });
@@ -49,7 +51,6 @@ export default function AdminCourseBuilder({ course, onBack }) {
     try {
       const res = await API.get(`/courses/${course.id}/`);
       setModules(res.data.modules || []);
-      if (res.data.modules?.length > 0) setExpanded(res.data.modules[0].id);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
@@ -97,14 +98,29 @@ export default function AdminCourseBuilder({ course, onBack }) {
 
   const handleAddLesson = async (e) => {
     e.preventDefault(); setSavingLesson(true);
-    try { await API.post(`/modules/${activeLessonModule}/lessons/`, lessonForm); showMsg('Lesson added.'); setLessonForm({ title: '', content_type: 'video', content_url: '', duration_seconds: '', sort_order: 1 }); setActiveLessonModule(null); fetchModules(); }
-    catch { showMsg('Could not add lesson.', 'error'); } finally { setSavingLesson(false); }
-  };
+      try {
+        await API.post(`/modules/${activeLessonModule}/lessons/`, {
+          ...lessonForm,
+          duration_seconds: lessonForm.duration_seconds || null,
+        });
+        showMsg('Lesson added.');
+        setLessonForm({ title: '', content_type: 'video', content_url: '', duration_seconds: '', sort_order: 1 });
+        setActiveLessonModule(null);
+        fetchModules();
+      } catch { showMsg('Could not add lesson.', 'error'); } finally { setSavingLesson(false); }
+    };
 
   const handleEditLesson = async (e) => {
     e.preventDefault(); setSavingLesson(true);
-    try { await API.patch(`/lessons/${editingLesson.id}/edit/`, lessonForm); showMsg('Lesson updated.'); setEditingLesson(null); fetchModules(); }
-    catch { showMsg('Could not update lesson.', 'error'); } finally { setSavingLesson(false); }
+    try {
+      await API.patch(`/lessons/${editingLesson.id}/edit/`, {
+        ...lessonForm,
+        duration_seconds: lessonForm.duration_seconds || null,
+      });
+      showMsg('Lesson updated.');
+      setEditingLesson(null);
+      fetchModules();
+    } catch { showMsg('Could not update lesson.', 'error'); } finally { setSavingLesson(false); }
   };
 
   const handleDeleteLesson = async (lesson) => {
@@ -441,22 +457,45 @@ export default function AdminCourseBuilder({ course, onBack }) {
                               </form>
                             </div>
                           ) : (
-                            <div style={S.lessonItem}>
-                              {contentTypeIcon(lesson.content_type)}
-                              <span style={S.lessonTitle}>{lesson.title}</span>
-                              <span style={S.typeBadge(lesson.content_type)}>{lesson.content_type}</span>
-                              {lesson.duration_seconds && (
-                                <span style={S.lessonDuration}>{Math.round(lesson.duration_seconds / 60)} mins</span>
-                              )}
-                              <div style={{ display: 'flex', gap: '6px' }}>
-                                <button style={S.warningBtn} onClick={() => { setEditingLesson(lesson); setLessonForm({ title: lesson.title, content_type: lesson.content_type, content_url: lesson.content_url || '', duration_seconds: lesson.duration_seconds || '', sort_order: lesson.sort_order }); }}>
-                                  <Edit size={12} />
-                                </button>
-                                <button style={S.dangerBtn} onClick={() => handleDeleteLesson(lesson)}>
-                                  <Trash2 size={12} />
-                                </button>
-                              </div>
-                            </div>
+                            <div key={lesson.id}>
+                              <div style={S.lessonItem} onClick={() => setExpandedLesson(expandedLesson === lesson.id ? null : lesson.id)}>
+                                  {contentTypeIcon(lesson.content_type)}
+                                  <span style={S.lessonTitle}>{lesson.title}</span>
+                                  <span style={S.typeBadge(lesson.content_type)}>{lesson.content_type}</span>
+                                  {lesson.duration_seconds && (
+                                    <span style={S.lessonDuration}>{Math.round(lesson.duration_seconds / 60)} mins</span>
+                                  )}
+                                  <div style={{ display: 'flex', gap: '6px' }} onClick={e => e.stopPropagation()}>
+                                    <button style={S.warningBtn} onClick={() => { setEditingLesson(lesson); setLessonForm({ title: lesson.title, content_type: lesson.content_type, content_url: lesson.content_url || '', duration_seconds: lesson.duration_seconds || '', sort_order: lesson.sort_order }); }}>
+                                      <Edit size={12} />
+                                    </button>
+                                    <button style={S.dangerBtn} onClick={() => handleDeleteLesson(lesson)}>
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </div>
+                                  {expandedLesson === lesson.id ? <ChevronUp size={14} color="#94a3b8" /> : <ChevronDown size={14} color="#94a3b8" />}
+                                </div>
+
+                                {expandedLesson === lesson.id && (
+                                  <div style={{ padding: '12px 14px', background: '#f8fafc', borderRadius: '0 0 8px 8px', border: '1px solid #f1f5f9', borderTop: 'none', marginBottom: '6px' }}>
+                                    {lesson.content_type === 'video' && (
+                                      <video controls style={{ width: '100%', borderRadius: '6px' }} src={lesson.content_url} />
+                                    )}
+                                    {lesson.content_type === 'youtube' && (
+                                      <iframe width="100%" height="250" src={lesson.content_url} frameBorder="0" allowFullScreen style={{ borderRadius: '6px' }} />
+                                    )}
+                                    {lesson.content_type === 'pdf' && (
+                                      <iframe src={lesson.content_url} width="100%" height="400px" style={{ borderRadius: '6px', border: 'none' }} />
+                                    )}
+                                    {lesson.content_type === 'ppt' && (
+                                      <iframe src={`https://docs.google.com/viewer?url=${encodeURIComponent(window.location.origin + lesson.content_url)}&embedded=true`} width="100%" height="400px" style={{ borderRadius: '6px', border: 'none' }} />
+                                    )}
+                                    {lesson.content_type === 'article' && (
+                                      <div style={{ fontSize: '0.875rem', color: '#1e293b', lineHeight: 1.6 }} dangerouslySetInnerHTML={{ __html: lesson.content_url }} />
+                                    )}
+                                  </div>
+                                )}
+                          </div>
                           )}
                         </div>
                       ))}

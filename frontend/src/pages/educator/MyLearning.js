@@ -63,98 +63,49 @@ export default function MyLearning() {
       flexDirection: 'column',
       overflow: 'hidden',
     },
-    cardBody: {
-      padding: '20px',
-      flex: 1,
-    },
+    cardBody: { padding: '20px', flex: 1 },
     cardTitle: {
-      fontSize: '1rem',
-      fontWeight: '700',
-      color: '#0f172a',
-      marginBottom: '6px',
+      fontSize: '1rem', fontWeight: '700', color: '#0f172a', marginBottom: '6px',
     },
     cardDesc: {
-      fontSize: '0.8rem',
-      color: '#64748b',
-      lineHeight: 1.5,
-      marginBottom: '14px',
+      fontSize: '0.8rem', color: '#64748b', lineHeight: 1.5, marginBottom: '14px',
     },
-    badgeRow: {
-      display: 'flex',
-      gap: '8px',
-      marginBottom: '14px',
-      flexWrap: 'wrap',
-    },
+    badgeRow: { display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' },
     badge: (bg, color) => ({
-      fontSize: '0.72rem',
-      fontWeight: '600',
-      padding: '3px 10px',
-      borderRadius: '20px',
-      background: bg,
-      color: color,
+      fontSize: '0.72rem', fontWeight: '600', padding: '3px 10px',
+      borderRadius: '20px', background: bg, color,
     }),
-    progressWrap: {
-      marginBottom: '12px',
-    },
+    progressWrap: { marginBottom: '12px' },
     progressBar: {
-      height: '6px',
-      background: '#e2e8f0',
-      borderRadius: '10px',
-      overflow: 'hidden',
-      marginBottom: '4px',
+      height: '6px', background: '#e2e8f0', borderRadius: '10px',
+      overflow: 'hidden', marginBottom: '4px',
     },
     progressFill: (pct) => ({
-      height: '100%',
-      width: `${pct}%`,
+      height: '100%', width: `${pct}%`,
       background: pct === 100 ? '#10b981' : '#2563eb',
-      borderRadius: '10px',
-      transition: 'width 0.3s ease',
+      borderRadius: '10px', transition: 'width 0.3s ease',
     }),
     progressText: {
-      fontSize: '0.72rem',
-      color: '#94a3b8',
-      fontWeight: '600',
-      textAlign: 'right',
+      fontSize: '0.72rem', color: '#94a3b8', fontWeight: '600', textAlign: 'right',
     },
-    dateRow: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '2px',
-      marginBottom: '4px',
-    },
+    dateRow: { display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '4px' },
     dateText: {
-      fontSize: '0.75rem',
-      color: '#94a3b8',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '5px',
+      fontSize: '0.75rem', color: '#94a3b8',
+      display: 'flex', alignItems: 'center', gap: '5px',
     },
     cardFooter: {
-      padding: '12px 20px',
-      borderTop: '1px solid #f1f5f9',
-      background: '#fafafa',
+      padding: '12px 20px', borderTop: '1px solid #f1f5f9', background: '#fafafa',
     },
     actionBtn: (isCompleted) => ({
-      width: '100%',
-      padding: '9px',
+      width: '100%', padding: '9px',
       background: isCompleted ? '#f0fdf4' : '#2563eb',
       color: isCompleted ? '#059669' : '#fff',
       border: isCompleted ? '1px solid #bbf7d0' : 'none',
-      borderRadius: '8px',
-      fontSize: '0.85rem',
-      fontWeight: '600',
-      cursor: 'pointer',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: '7px',
-      transition: 'opacity 0.15s',
+      borderRadius: '8px', fontSize: '0.85rem', fontWeight: '600',
+      cursor: 'pointer', display: 'flex', alignItems: 'center',
+      justifyContent: 'center', gap: '7px', transition: 'opacity 0.15s',
     }),
-    emptyState: {
-      textAlign: 'center',
-      padding: '48px 24px',
-      color: '#94a3b8',
-    },
+    emptyState: { textAlign: 'center', padding: '48px 24px', color: '#94a3b8' },
   };
 
   const statusConfig = {
@@ -168,14 +119,14 @@ export default function MyLearning() {
       {enrolments.length === 0 ? (
         <div style={S.emptyState}>
           <BookOpen size={40} color="#cbd5e1" style={{ marginBottom: '12px' }} />
-          <div style={{ fontSize: '0.9rem' }}>No enrolments yet. Check Assigned Courses to get started!</div>
+          <div style={{ fontSize: '0.9rem' }}>No courses yet. Courses assigned to you will appear here.</div>
         </div>
       ) : (
         <div style={S.grid}>
           {enrolments.map(enrolment => {
-            const pct        = progress[enrolment.course.id] ?? 0;
+            const pct         = progress[enrolment.course.id] ?? 0;
             const isCompleted = enrolment.status === 'completed';
-            const sc         = statusConfig[enrolment.status] || statusConfig.not_started;
+            const sc          = statusConfig[enrolment.status] || statusConfig.not_started;
 
             return (
               <div style={S.card} key={enrolment.id}>
@@ -212,13 +163,12 @@ export default function MyLearning() {
                 </div>
 
                 <div style={S.cardFooter}>
-                  <button
-                    style={S.actionBtn(isCompleted)}
-                    onClick={() => setActive(enrolment)}
-                  >
+                  <button style={S.actionBtn(isCompleted)} onClick={() => setActive(enrolment)}>
                     {isCompleted
                       ? <><FileText size={14} /> Review Course</>
-                      : <><PlayCircle size={14} /> Continue Learning</>
+                      : enrolment.status === 'not_started'
+                        ? <><PlayCircle size={14} /> Start Course</>
+                        : <><PlayCircle size={14} /> Continue Learning</>
                     }
                   </button>
                 </div>

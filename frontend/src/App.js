@@ -7,6 +7,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import Login from './pages/auth/Login';
+import ChangePassword from './pages/auth/ChangePassword';
 
 function ProtectedRoute({ children, allowedRoles }) {
   const { user } = useAuth();
@@ -21,6 +22,7 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/change-password" element={<ChangePassword />} />
 
           {/* Educator */}
           <Route path="/educator/*" element={

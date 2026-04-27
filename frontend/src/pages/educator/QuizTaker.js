@@ -55,7 +55,7 @@ safety and wellbeing of children in my care.`;
 
   const allAnswered = () => questions.every(q => {
     const ans = answers[q.id];
-    if (q.question_type === 'mcq' || q.question_type === 'truefalse') return ans && ans.option_id;
+    if (q.question_type === 'mcq' || q.question_type === 'single_choice' || q.question_type === 'truefalse') return ans && ans.option_id;
     if (q.question_type === 'short_answer') return ans && ans.answer_text?.trim().length > 0;
     return false;
   });
@@ -74,7 +74,7 @@ safety and wellbeing of children in my care.`;
     try {
       const answersPayload = questions.map(q => {
         const ans = answers[q.id];
-        if (q.question_type === 'mcq' || q.question_type === 'truefalse') return { question_id: q.id, option_id: ans.option_id };
+        if (q.question_type === 'mcq' || q.question_type === 'single_choice' || q.question_type === 'truefalse') return { question_id: q.id, option_id: ans.option_id };
         return { question_id: q.id, answer_text: ans.answer_text };
       });
       const res = await API.post(`/attempts/${attempt.attempt_id}/submit/`, {
@@ -351,7 +351,7 @@ safety and wellbeing of children in my care.`;
 
         <div style={S.questionText}>{currentQ + 1}. {currentQuestion.question_text}</div>
 
-        {(currentQuestion.question_type === 'mcq' || currentQuestion.question_type === 'truefalse') && (
+        {(currentQuestion.question_type === 'mcq' || currentQuestion.question_type === 'single_choice' || currentQuestion.question_type === 'truefalse') && (
           <div>
             {currentQuestion.options?.map(option => {
               const isSelected = answers[currentQuestion.id]?.option_id === option.id;

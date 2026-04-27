@@ -56,12 +56,13 @@ export default function EducatorDashboard() {
   const S = {
     layout: {
       display: 'flex',
-      minHeight: '100vh',
+      height: '100vh',
+      overflow: 'hidden',
       fontFamily: "'Segoe UI', 'Helvetica Neue', sans-serif",
     },
     sidebar: {
       width: sidebarOpen ? '240px' : '68px',
-      minHeight: '100vh',
+      height: '100vh',
       background: 'linear-gradient(180deg, #0369a1 0%, #29abe2 100%)',
       display: 'flex',
       flexDirection: 'column',

@@ -33,10 +33,14 @@ export default function Login() {
     setLoading(true);
     try {
       const res = await API.post('/auth/login/', { email, password });
+      if (res.data.must_change_password) {
+        navigate('/change-password', { state: { token: res.data.token, user: res.data.user } });
+        return;
+      }
       login(res.data.user, res.data.token);
       navigate(getRedirectPath(res.data.user.role));
     } catch (err) {
-      setError('Invalid email or password.');
+      setError(err.response?.data?.error || 'Invalid email or password.');
     } finally {
       setLoading(false);
     }

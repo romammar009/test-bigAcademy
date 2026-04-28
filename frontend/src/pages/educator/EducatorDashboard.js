@@ -2,7 +2,6 @@ import NotificationsPage from '../shared/NotificationsPage';
 import logo from '../../BigChildcare-Logo.png';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import BrowseCourses from './AssignedCourses';
 import MyLearning from './MyLearning';
 import MyCertificates from './MyCertificates';
 import API from '../../api/axios';
@@ -15,11 +14,9 @@ import {
 } from 'lucide-react';
 
 const SIDEBAR_ITEMS = [
-  { key: 'dashboard',       path: '/educator/dashboard',       icon: LayoutDashboard, label: 'Dashboard'        },
-  { key: 'courses',         path: '/educator/courses',         icon: BookOpen,        label: 'Assigned Courses' },
-  { key: 'learning',        path: '/educator/learning',        icon: GraduationCap,   label: 'My Learning'      },
-  { key: 'certificates',    path: '/educator/certificates',    icon: Award,           label: 'Certificates'     },
-  { key: 'notifications', icon: Bell, label: 'Notifications'},
+  { key: 'dashboard',    icon: LayoutDashboard, label: 'Dashboard'   },
+  { key: 'learning',     icon: GraduationCap,   label: 'My Learning' },
+  { key: 'certificates', icon: Award,           label: 'Certificates'},
 ];
 
 export default function EducatorDashboard() {
@@ -53,18 +50,19 @@ export default function EducatorDashboard() {
   const handleLogout = async () => {
     try { await API.post('/auth/logout/'); } catch (err) {}
     logout();
-    navigate('/login');
+    navigate('/bigacademy-login2026');
   };
 
   const S = {
     layout: {
       display: 'flex',
-      minHeight: '100vh',
+      height: '100vh',
+      overflow: 'hidden',
       fontFamily: "'Segoe UI', 'Helvetica Neue', sans-serif",
     },
     sidebar: {
       width: sidebarOpen ? '240px' : '68px',
-      minHeight: '100vh',
+      height: '100vh',
       background: 'linear-gradient(180deg, #0369a1 0%, #29abe2 100%)',
       display: 'flex',
       flexDirection: 'column',
@@ -352,9 +350,8 @@ export default function EducatorDashboard() {
       <div style={S.sectionLabel}>Quick Links</div>
       <div style={S.quickLinksGrid}>
         {[
-          { Icon: BookOpen,      bg: '#eff6ff', color: '#2563eb', label: 'Assigned Courses', sub: 'View & enrol in courses',     tab: 'courses'       },
-          { Icon: GraduationCap, bg: '#fefce8', color: '#d97706', label: 'My Learning',       sub: 'Continue where you left off', tab: 'learning'     },
-          { Icon: Award,         bg: '#f5f3ff', color: '#7c3aed', label: 'Certificates',      sub: 'Download your certificates',  tab: 'certificates' },
+          { Icon: GraduationCap, bg: '#e0f2fe', color: '#0369a1', label: 'My Learning',      sub: 'Start or continue courses',   tab: 'learning'     },
+          { Icon: Award,         bg: '#f5f3ff', color: '#7c3aed', label: 'Certificates',     sub: 'Download your certificates',  tab: 'certificates' },
         ].map(link => (
           <div key={link.tab} style={S.quickLink} onClick={() => setActiveTab(link.tab)}>
             <div style={S.quickLinkIconBox(link.bg)}>
@@ -472,10 +469,9 @@ export default function EducatorDashboard() {
         </div>
 
         <div style={S.content}>
-          {activeTab === 'dashboard'         && <HomeDashboard />}
-          {activeTab === 'browse'       && <BrowseCourses />}
-          {activeTab === 'learning'     && <MyLearning />}
-          {activeTab === 'certificates' && <MyCertificates />}
+          {activeTab === 'dashboard'     && <HomeDashboard />}
+          {activeTab === 'learning'      && <MyLearning />}
+          {activeTab === 'certificates'  && <MyCertificates />}
           {activeTab === 'notifications' && <NotificationsPage />}
         </div>
       </div>

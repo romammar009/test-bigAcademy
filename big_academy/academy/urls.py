@@ -4,12 +4,17 @@ from . import views
 urlpatterns = [
 
     # AUTH
-    path('auth/login/',          views.login,         name='login'),
-    path('auth/logout/',         views.logout,        name='logout'),
-    path('auth/me/',             views.my_profile,    name='my-profile'),
+    path('auth/login/',           views.login,           name='login'),
+    path('auth/logout/',          views.logout,          name='logout'),
+    path('auth/me/',              views.my_profile,      name='my-profile'),
+    path('auth/change-password/', views.change_password, name='change-password'),
+
+    # LOCATIONS
+    path('locations/', views.list_locations, name='list-locations'),
 
     # USER MANAGEMENT
     path('users/register/',                    views.register_user,  name='register-user'),
+    path('users/<int:user_id>/update/',        views.update_user,    name='update-user'),
     path('users/<int:user_id>/offboard/',      views.offboard_user,  name='offboard-user'),
     path('users/', views.list_users, name='list-users'),
 
@@ -24,6 +29,7 @@ urlpatterns = [
 
     # LESSONS
     path('modules/<int:module_id>/lessons/',   views.lesson_create,  name='lesson-create'),
+    path('lessons/upload/', views.lesson_file_upload, name='lesson-upload'),
 
     # QUIZZES
     path('courses/<int:course_id>/quizzes/',   views.quiz_create,    name='quiz-create'),

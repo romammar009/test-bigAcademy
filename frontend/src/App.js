@@ -7,11 +7,13 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import Login from './pages/auth/Login';
+import ChangePassword from './pages/auth/ChangePassword';
+import Maintenance from './Maintenance';
 
 function ProtectedRoute({ children, allowedRoles }) {
   const { user } = useAuth();
-  if (!user) return <Navigate to="/login" />;
-  if (allowedRoles && !allowedRoles.includes(user.role)) return <Navigate to="/login" />;
+  if (!user) return <Navigate to="/bigacademy-login2026" />;
+  if (allowedRoles && !allowedRoles.includes(user.role)) return <Navigate to="/bigacademy-login2026" />;
   return children;
 }
 
@@ -20,7 +22,9 @@ function App() {
     <AuthProvider>
       <Router>
         <Routes>
-          <Route path="/login" element={<Login />} />
+          <Route path="/bigacademy-login2026" element={<Login />} />
+          <Route path="/login" element={<Maintenance />} />
+          <Route path="/change-password" element={<ChangePassword />} />
 
           {/* Educator */}
           <Route path="/educator/*" element={
@@ -50,7 +54,7 @@ function App() {
             </ProtectedRoute>
           } />
 
-          <Route path="*" element={<Navigate to="/login" />} />
+          <Route path="*" element={<Maintenance />} />
         </Routes>
       </Router>
     </AuthProvider>

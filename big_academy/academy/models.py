@@ -45,8 +45,10 @@ class Users(models.Model):
     created_at       = models.DateTimeField(blank=True, null=True)
     updated_at       = models.DateTimeField(blank=True, null=True)
     last_login_at    = models.DateTimeField(blank=True, null=True)
-    phone_number     = models.CharField(max_length=20, blank=True, null=True)
-    employee_id      = models.CharField(max_length=20, blank=True, null=True)
+    phone_number             = models.CharField(max_length=20, blank=True, null=True)
+    employee_id              = models.CharField(max_length=20, blank=True, null=True)
+    must_change_password     = models.BooleanField(default=False)
+    temp_password_expires_at = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.role})"

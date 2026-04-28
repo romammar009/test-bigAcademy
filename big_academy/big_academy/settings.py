@@ -29,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'True') == 'True'
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 # who is allowed to access this site
 ALLOWED_HOSTS = ['academy.bigchildcare.com', '67.219.109.30', 'localhost', '127.0.0.1']
@@ -175,7 +175,7 @@ FRONTEND_URL       = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
 # Media files (uploads)
 MEDIA_URL  = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media/')
 
 DATA_UPLOAD_MAX_MEMORY_SIZE = 524288000
 FILE_UPLOAD_MAX_MEMORY_SIZE = 524288000

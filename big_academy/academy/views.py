@@ -1952,7 +1952,7 @@ def create_assignment(request):
         target_users    = request.data.get('target_users', [])
         target_value    = request.data.get('target_value', '')
         mandatory       = request.data.get('mandatory', True)
-        due_at          = request.data.get('due_at')
+        due_at          = request.data.get('due_at') or None
 
         try:
             course = Courses.objects.get(id=course_id)
@@ -1969,6 +1969,7 @@ def create_assignment(request):
             created_at      = timezone.now(),
             updated_at      = timezone.now(),
         )
+        assignment.refresh_from_db()
 
         if assignment_type == 'all':
             if academy_user.role == 'area_manager':

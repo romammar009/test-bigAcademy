@@ -97,7 +97,7 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
         assignment_type: form.assignment_type,
         target_users:    form.assignment_type === 'filtered' ? selectedUsers : [],
         mandatory:       form.mandatory,
-        due_at:          form.due_at,
+        due_at:          form.due_at || null,
       });
       showMsg(form.assignment_type === 'all'
         ? 'Course assigned to all staff successfully.'

@@ -63,17 +63,17 @@ export default function AreaManagerDashboard() {
   const handleLogout = async () => {
     try { await API.post('/auth/logout/'); } catch (err) {}
     logout();
-    navigate('/login');
+    navigate('/bigacademy-login2026');
   };
 
   const S = {
     layout: {
-      display: 'flex', minHeight: '100vh',
+      display: 'flex', height: '100vh', overflow: 'hidden',
       fontFamily: "'Segoe UI', 'Helvetica Neue', sans-serif",
     },
     sidebar: {
       width: sidebarOpen ? '240px' : '68px',
-      minHeight: '100vh',
+      height: '100vh',
       background: 'linear-gradient(180deg, #0a0d4a 0%, #1a1f8c 100%)',
       display: 'flex', flexDirection: 'column',
       transition: 'width 0.25s ease',
@@ -183,7 +183,7 @@ export default function AreaManagerDashboard() {
 
         <div style={S.statsGrid}>
           {[
-            { label: 'Total Staff',     value: stats.total_staff,     Icon: Users,        accent: '#2563eb', iconColor: '#2563eb', iconBg: '#eff6ff' },
+            { label: 'Total Staff',     value: stats.total_staff,     Icon: Users,        accent: '#2563eb', iconColor: '#1a1f8c', iconBg: '#eff6ff' },
             { label: 'Pending Grading', value: stats.pending_grading, Icon: GraduationCap,accent: '#f59e0b', iconColor: '#f59e0b', iconBg: '#fefce8' },
             { label: 'Unlock Requests', value: stats.pending_unlocks, Icon: Unlock,       accent: '#ef4444', iconColor: '#ef4444', iconBg: '#fef2f2' },
             { label: 'Courses',         value: 0,                     Icon: BookMarked,   accent: '#10b981', iconColor: '#10b981', iconBg: '#f0fdf4' },
@@ -201,7 +201,7 @@ export default function AreaManagerDashboard() {
         <div style={S.sectionLabel}>Quick Links</div>
         <div style={S.quickLinksGrid}>
           {[
-            { Icon: BookOpen,      bg: '#eff6ff', color: '#2563eb', label: 'Courses',        sub: 'Create & manage courses',      path: '/area-manager/courses'     },
+            { Icon: BookOpen,      bg: '#eff6ff', color: '#1a1f8c', label: 'Courses',        sub: 'Create & manage courses',      path: '/area-manager/courses'     },
             { Icon: ClipboardList, bg: '#f0fdf4', color: '#059669', label: 'Assignments',     sub: 'Assign courses to staff',      path: '/area-manager/assignments' },
             { Icon: GraduationCap, bg: '#fefce8', color: '#d97706', label: 'Quiz Grading',    sub: 'Grade short answer responses', path: '/area-manager/grading'     },
             { Icon: Unlock,        bg: '#fef2f2', color: '#ef4444', label: 'Unlock Requests', sub: 'Review quiz unlock requests',  path: '/area-manager/requests'    },
@@ -226,7 +226,7 @@ export default function AreaManagerDashboard() {
               <div style={S.sectionLabel}>Latest Updates</div>
               <button
                 onClick={() => navigate('/area-manager/notifications')}
-                style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: '#1a1f8c', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer' }}
               >
                 View all →
               </button>
@@ -235,12 +235,12 @@ export default function AreaManagerDashboard() {
               {recentNotifs.map(n => (
                 <div key={n.id} style={{
                   background: '#fff', borderRadius: '10px', padding: '12px 16px',
-                  border: `1px solid ${!n.is_read ? '#bfdbfe' : '#e2e8f0'}`,
+                  border: `1px solid ${!n.is_read ? '#c7d2fe' : '#e2e8f0'}`,
                   display: 'flex', gap: '10px', alignItems: 'flex-start',
                 }}>
                   <div style={{
                     width: '8px', height: '8px', borderRadius: '50%',
-                    background: !n.is_read ? '#2563eb' : '#e2e8f0',
+                    background: !n.is_read ? '#1a1f8c' : '#e2e8f0',
                     flexShrink: 0, marginTop: '5px',
                   }} />
                   <div style={{ flex: 1 }}>
@@ -319,7 +319,7 @@ export default function AreaManagerDashboard() {
       <div style={S.main}>
         <div style={S.topbar}>
           <div style={S.pageTitle}>
-            {ActiveIcon && <ActiveIcon size={18} color="#2563eb" />}
+            {ActiveIcon && <ActiveIcon size={18} color="#1a1f8c" />}
             {activeItem?.label}
           </div>
           <NotificationBell />
@@ -328,9 +328,9 @@ export default function AreaManagerDashboard() {
 
         <div style={S.content}>
           {activeItem?.key === 'dashboard'     && <HomeDashboard />}
-          {activeItem?.key === 'courses'       && <CoursesManager accentColor="#2563eb" />}
-          {activeItem?.key === 'assignments'   && <AssignmentsManager accentColor="#2563eb" />}
-          {activeItem?.key === 'grading'       && <QuizGrading accentColor="#2563eb" />}
+          {activeItem?.key === 'courses'       && <CoursesManager accentColor="#1a1f8c" />}
+          {activeItem?.key === 'assignments'   && <AssignmentsManager accentColor="#1a1f8c" />}
+          {activeItem?.key === 'grading'       && <QuizGrading accentColor="#1a1f8c" />}
           {activeItem?.key === 'requests'      && <SuperAdminUnlockRequests />}
           {activeItem?.key === 'staff'         && <SuperAdminStaff />}
           {activeItem?.key === 'reports'       && <SuperAdminReports />}

@@ -1,5 +1,8 @@
 import random
 import uuid
+import secrets
+import string
+from datetime import timedelta
 from io import BytesIO
 
 import bcrypt
@@ -23,7 +26,7 @@ from .models import (
     Users, Enrolments, Courses, Assignments,
     CourseModules, Lessons, Quizzes,
     QuizQuestions, QuizOptions,
-    LessonProgress, Certificates
+    LessonProgress, Certificates, Locations
 )
 from .emails import (
     send_welcome_email,
@@ -33,7 +36,7 @@ from .emails import (
     send_assignment_reminder_email,
 )
 from .serializers import (
-    UserSerializer, RegisterUserSerializer,
+    UserSerializer, RegisterUserSerializer, LocationSerializer,
     CourseSerializer, CourseCreateSerializer,
     CourseModuleSerializer, ModuleCreateSerializer,
     LessonSerializer, LessonCreateSerializer,
@@ -125,6 +128,14 @@ def login(request):
             status=status.HTTP_401_UNAUTHORIZED
         )
 
+    if academy_user.must_change_password:
+        expires = academy_user.temp_password_expires_at
+        if expires and timezone.now() > expires:
+            return Response(
+                {'error': 'Temporary password has expired. Please contact HR to reset your password.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
     django_user, created = DjangoUser.objects.get_or_create(
         username=academy_user.email,
         defaults={'email': academy_user.email}
@@ -135,17 +146,26 @@ def login(request):
 
     token, _ = Token.objects.get_or_create(user=django_user)
 
+    user_payload = {
+        'id':               academy_user.id,
+        'email':            academy_user.email,
+        'first_name':       academy_user.first_name,
+        'last_name':        academy_user.last_name,
+        'role':             academy_user.role,
+        'is_hr_executive':  academy_user.is_hr_executive,
+        'location':         academy_user.location.name if academy_user.location else None,
+    }
+
+    if academy_user.must_change_password:
+        return Response({
+            'must_change_password': True,
+            'token': token.key,
+            'user':  user_payload,
+        }, status=status.HTTP_200_OK)
+
     return Response({
         'token': token.key,
-        'user': {
-            'id':               academy_user.id,
-            'email':            academy_user.email,
-            'first_name':       academy_user.first_name,
-            'last_name':        academy_user.last_name,
-            'role':             academy_user.role,
-            'is_hr_executive':  academy_user.is_hr_executive,
-            'location':         academy_user.location.name if academy_user.location else None,
-        }
+        'user':  user_payload,
     }, status=status.HTTP_200_OK)
 
 
@@ -169,6 +189,34 @@ def logout(request):
 
 
 # ============================================================
+# CHANGE PASSWORD (temp → permanent)
+# ============================================================
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password(request):
+    academy_user = get_academy_user(request)
+    if not academy_user:
+        return Response({'error': 'User not found.'}, status=status.HTTP_403_FORBIDDEN)
+
+    new_password = request.data.get('new_password', '').strip()
+    if len(new_password) < 8:
+        return Response({'error': 'Password must be at least 8 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    hashed = bcrypt.hashpw(
+        new_password.encode('utf-8'),
+        bcrypt.gensalt()
+    ).decode('utf-8')
+
+    academy_user.password_hash            = hashed
+    academy_user.must_change_password     = False
+    academy_user.temp_password_expires_at = None
+    academy_user.updated_at               = timezone.now()
+    academy_user.save()
+
+    return Response({'message': 'Password updated successfully.'}, status=status.HTTP_200_OK)
+
+
+# ============================================================
 # GET CURRENT LOGGED IN USER PROFILE
 # ============================================================
 @api_view(['GET'])
@@ -183,6 +231,16 @@ def my_profile(request):
             {'error': 'User not found.'},
             status=status.HTTP_404_NOT_FOUND
         )
+
+
+# ============================================================
+# LIST LOCATIONS
+# ============================================================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_locations(request):
+    locations = Locations.objects.all().order_by('name')
+    return Response(LocationSerializer(locations, many=True).data)
 
 
 # ============================================================
@@ -205,27 +263,48 @@ def register_user(request):
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    raw_password = request.data.get('password')
-    if not raw_password:
-        return Response({'error': 'Password is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    alphabet     = string.ascii_letters + string.digits
+    raw_password = ''.join(secrets.choice(alphabet) for _ in range(10))
 
     hashed = bcrypt.hashpw(
         raw_password.encode('utf-8'),
         bcrypt.gensalt()
     ).decode('utf-8')
 
+    role = serializer.validated_data['role']
+    location_ids = request.data.get('location_ids', [])
+
+    # For area managers, set primary location from the first of location_ids
+    primary_location = serializer.validated_data.get('location')
+    if role == 'area_manager' and location_ids:
+        try:
+            primary_location = Locations.objects.get(id=int(location_ids[0]))
+        except Locations.DoesNotExist:
+            pass
+
     new_user = Users.objects.create(
-        email         = serializer.validated_data['email'],
-        first_name    = serializer.validated_data['first_name'],
-        last_name     = serializer.validated_data['last_name'],
-        role          = serializer.validated_data['role'],
-        location      = serializer.validated_data.get('location'),
-        phone_number  = serializer.validated_data.get('phone_number'),
-        password_hash = hashed,
-        status        = 'active',
-        created_at    = timezone.now(),
-        updated_at    = timezone.now(),
+        email                    = serializer.validated_data['email'],
+        first_name               = serializer.validated_data['first_name'],
+        last_name                = serializer.validated_data['last_name'],
+        role                     = role,
+        location                 = primary_location,
+        phone_number             = serializer.validated_data.get('phone_number'),
+        password_hash            = hashed,
+        status                   = 'active',
+        must_change_password     = True,
+        temp_password_expires_at = timezone.now() + timedelta(hours=24),
+        created_at               = timezone.now(),
+        updated_at               = timezone.now(),
     )
+
+    # Assign all selected locations to area manager via SuperAdminLocations
+    if role == 'area_manager':
+        for loc_id in location_ids:
+            try:
+                loc = Locations.objects.get(id=int(loc_id))
+                SuperAdminLocations.objects.get_or_create(user=new_user, location=loc)
+            except Locations.DoesNotExist:
+                pass
 
     mandatory_assignments = Assignments.objects.filter(
         mandatory=True,
@@ -259,6 +338,38 @@ def register_user(request):
 # HR executives (is_hr_executive=True) can offboard other HR users
 # Regular HR (Rob, Sean) cannot offboard other HR users
 # ============================================================
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_user(request, user_id):
+    academy_user = get_academy_user(request)
+    if not academy_user or academy_user.role not in ONBOARD_ROLES:
+        return Response({'error': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+    target = get_object_or_404(Users, id=user_id)
+
+    if target.role == 'hr' and not academy_user.is_hr_executive:
+        return Response({'error': 'Only HR Executives can edit HR users.'}, status=status.HTTP_403_FORBIDDEN)
+
+    for field in ['first_name', 'last_name', 'phone_number', 'role', 'status']:
+        if field in request.data:
+            setattr(target, field, request.data[field])
+
+    loc_id = request.data.get('location_id')
+    if 'location_id' in request.data:
+        if loc_id:
+            try:
+                target.location = Locations.objects.get(id=int(loc_id))
+            except Locations.DoesNotExist:
+                pass
+        else:
+            target.location = None
+
+    target.updated_at = timezone.now()
+    target.save()
+
+    return Response(UserSerializer(target).data, status=status.HTTP_200_OK)
+
+
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def offboard_user(request, user_id):
@@ -446,6 +557,20 @@ def publish_course(request, course_id):
 
     course.updated_at = timezone.now()
     course.save()
+
+    if action == 'publish':
+        enrolled_users = Enrolments.objects.filter(
+            course=course,
+            status__in=['not_started', 'in_progress']
+        ).select_related('user')
+        for enrolment in enrolled_users:
+            create_notification(
+                recipient  = enrolment.user,
+                notif_type = 'general',
+                title      = 'Course Now Available',
+                message    = f'The course "{course.title}" is now available. Start learning today!'
+            )
+
     return Response(CourseSerializer(course).data, status=200)
 
 
@@ -657,6 +782,43 @@ def browse_courses(request):
 
     return Response(data, status=status.HTTP_200_OK)
 
+# ============================================================
+# ASSIGNMENTS PREVIEW
+# ============================================================
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def preview_assignment_users(request):
+    academy_user = get_academy_user(request)
+    if not academy_user or academy_user.role not in CONTENT_ROLES:
+        return Response({'error': 'Access denied.'}, status=403)
+
+    location_ids = request.data.get('location_ids', [])
+    roles        = request.data.get('roles', [])
+
+    users = Users.objects.filter(status='active')
+
+    if academy_user.role == 'area_manager':
+        assigned_location_ids = SuperAdminLocations.objects.filter(
+            user=academy_user
+        ).values_list('location_id', flat=True)
+        users = users.filter(location_id__in=assigned_location_ids)
+
+    if location_ids:
+        users = users.filter(location_id__in=location_ids)
+
+    if roles:
+        users = users.filter(role__in=roles)
+    else:
+        users = users.filter(role__in=['educator', 'branch_manager'])
+
+    data = [{
+        'id':       u.id,
+        'name':     f"{u.first_name} {u.last_name}",
+        'role':     u.role,
+        'location': u.location.name if u.location else '—',
+    } for u in users]
+
+    return Response({'users': data}, status=200)
 
 # ============================================================
 # SELF ENROL IN A COURSE
@@ -836,7 +998,7 @@ def start_quiz_attempt(request, quiz_id):
             'question_type': q.question_type,
             'sort_order':    q.sort_order,
         }
-        if q.question_type in ['mcq', 'truefalse']:
+        if q.question_type in ['mcq', 'single_choice', 'truefalse']:
             options = list(QuizOptions.objects.filter(question=q).values('id', 'option_text'))
             random.shuffle(options)
             q_data['options'] = options
@@ -885,7 +1047,7 @@ def submit_quiz_attempt(request, attempt_id):
         if not submitted:
             continue
 
-        if q.question_type in ['mcq', 'truefalse']:
+        if q.question_type in ['mcq', 'single_choice', 'truefalse']:
             mcq_total += 1
             option_id  = submitted.get('option_id')
             try:
@@ -976,7 +1138,7 @@ def submit_quiz_attempt(request, attempt_id):
 
     correct_answers = {}
     for q in questions:
-        if q.question_type in ['mcq', 'truefalse']:
+        if q.question_type in ['mcq', 'single_choice', 'truefalse']:
             correct_opt = QuizOptions.objects.filter(question=q, is_correct=True).first()
             if correct_opt:
                 correct_answers[q.id] = {
@@ -1201,6 +1363,25 @@ def request_quiz_unlock(request, quiz_id):
            message    = f'{academy_user.first_name} {academy_user.last_name} has requested a quiz unlock for "{quiz.title}".'
         )
 
+    # If no area managers were found for this location, fall back to notifying all HR users
+    if not managers.exists():
+        hr_users = Users.objects.filter(role='hr', status='active')
+        for hr_user in hr_users:
+            create_notification(
+                recipient  = hr_user,
+                notif_type = 'general',
+                title      = 'New Unlock Request',
+                message    = f'{academy_user.first_name} {academy_user.last_name} has requested a quiz unlock for "{quiz.title}".'
+            )
+
+    # Notify the requesting user that their request was received
+    create_notification(
+        recipient  = academy_user,
+        notif_type = 'general',
+        title      = 'Unlock Request Submitted',
+        message    = f'Your unlock request for "{quiz.title}" has been submitted. Your manager will review it shortly.'
+    )
+
     return Response({
        'message':    'Unlock request submitted successfully.',
        'request_id': unlock_request.id,
@@ -1227,8 +1408,7 @@ def review_unlock_request(request, request_id):
     target_user_role = unlock_request.user.role
     if academy_user.role == 'area_manager' and target_user_role not in ['branch_manager', 'educator']:
         return Response({'error': 'Area Managers can only unlock requests for Branch Managers and Educators.'}, status=403)
-    if academy_user.role == 'hr' and target_user_role != 'area_manager':
-        return Response({'error': 'HR can only unlock requests for Area Managers.'}, status=403)
+    # HR can review unlock requests for any role
 
     if unlock_request.status != 'pending':
         return Response({'error': 'This request has already been reviewed.'}, status=400)
@@ -1246,7 +1426,9 @@ def review_unlock_request(request, request_id):
     unlock_request.save()
 
     if new_status == 'approved':
-        QuizAttempts.objects.filter(user=unlock_request.user, quiz=unlock_request.quiz).delete()
+        attempts = QuizAttempts.objects.filter(user=unlock_request.user, quiz=unlock_request.quiz)
+        QuizAnswers.objects.filter(attempt__in=attempts).delete()
+        attempts.delete()
 
     create_notification(
         recipient  = unlock_request.user,
@@ -1294,7 +1476,7 @@ def list_unlock_requests(request):
             user__location_id__in=assigned_location_ids
         )
     elif academy_user.role == 'hr':
-        requests = requests.filter(user__role='area_manager')
+        pass  # HR sees all pending unlock requests regardless of role
 
     data = []
     for req in requests:
@@ -1488,6 +1670,37 @@ def course_progress(request, course_id):
         'completed_lesson_ids': completed_lesson_ids,
     }, status=200)
 
+# ============================================================
+# FILE UPLOAD FOR LESSONS
+# ============================================================
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def lesson_file_upload(request):
+    academy_user = get_academy_user(request)
+    if not academy_user or academy_user.role not in CONTENT_ROLES:
+        return Response({'error': 'Access denied.'}, status=403)
+
+    file         = request.FILES.get('file')
+    content_type = request.data.get('content_type')
+
+    if not file:
+        return Response({'error': 'No file provided.'}, status=400)
+
+    import os
+    from django.core.files.storage import default_storage
+    from django.core.files.base import ContentFile
+
+    folder_map = {
+        'video': 'videos',
+        'pdf':   'pdfs',
+        'ppt':   'ppts',
+    }
+    folder   = folder_map.get(content_type, 'uploads')
+    filename = f"{folder}/{uuid.uuid4()}_{file.name}"
+    path     = default_storage.save(filename, ContentFile(file.read()))
+    url      = f"/media/{path}"
+
+    return Response({'url': url, 'filename': file.name}, status=200)
 
 # ============================================================
 # QUIZ — Get last attempt answers
@@ -1516,7 +1729,7 @@ def quiz_last_attempt_answers(request, quiz_id):
     answers_data    = []
 
     for ans in answers:
-        if ans.question.question_type in ['mcq', 'truefalse']:
+        if ans.question.question_type in ['mcq', 'single_choice', 'truefalse']:
             correct_opt = QuizOptions.objects.filter(
                 question=ans.question, is_correct=True
             ).first()
@@ -1712,74 +1925,98 @@ def list_assignments(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_assignment(request):
-    academy_user = get_academy_user(request)
-    if not academy_user or academy_user.role not in CONTENT_ROLES:
-        return Response({'error': 'Access denied.'}, status=403)
-
-    course_id       = request.data.get('course_id')
-    assignment_type = request.data.get('assignment_type', 'all')
-    target_value    = request.data.get('target_value', '')
-    mandatory       = request.data.get('mandatory', True)
-    due_at          = request.data.get('due_at')
-
+    print("CREATE ASSIGNMENT CALLED", request.data)
     try:
-        course = Courses.objects.get(id=course_id)
-    except Courses.DoesNotExist:
-        return Response({'error': 'Course not found.'}, status=404)
+        academy_user = get_academy_user(request)
+        if not academy_user or academy_user.role not in CONTENT_ROLES:
+            return Response({'error': 'Access denied.'}, status=403)
 
-    existing = Assignments.objects.filter(
-        course=course,
-        assignment_type=assignment_type,
-        target_value=target_value
-    ).exists()
-    if existing:
-        return Response({'error': 'This assignment already exists.'}, status=400)
+        course_id       = request.data.get('course_id')
+        assignment_type = request.data.get('assignment_type', 'all')
+        target_users    = request.data.get('target_users', [])
+        target_value    = request.data.get('target_value', '')
+        mandatory       = request.data.get('mandatory', True)
+        due_at          = request.data.get('due_at')
 
-    assignment = Assignments.objects.create(
-        course          = course,
-        assignment_type = assignment_type,
-        target_value    = target_value,
-        mandatory       = mandatory,
-        due_at          = due_at,
-        created_by      = academy_user,
-        created_at      = timezone.now(),
-        updated_at      = timezone.now(),
-    )
-
-    if assignment_type == 'all':
-        users = Users.objects.filter(status='active', location=academy_user.location)
-    elif assignment_type == 'user':
         try:
-            specific_user = Users.objects.get(id=int(target_value), status='active')
-            users = [specific_user]
-        except Users.DoesNotExist:
-            users = []
-    else:
-        users = Users.objects.filter(role=target_value, status='active', location=academy_user.location)
+            course = Courses.objects.get(id=course_id)
+        except Courses.DoesNotExist:
+            return Response({'error': 'Course not found.'}, status=404)
 
-    for user in users:
-        already_enrolled = Enrolments.objects.filter(user=user, course=course).exists()
-        if not already_enrolled:
-            Enrolments.objects.create(
-                user       = user,
-                course     = course,
-                source     = 'assignment',
-                status     = 'not_started',
-                created_at = timezone.now(),
-                updated_at = timezone.now(),
-            )
-            send_assignment_reminder_email(user, course, assignment)
+        assignment = Assignments.objects.create(
+            course          = course,
+            assignment_type = assignment_type,
+            target_value    = target_value,
+            mandatory       = mandatory,
+            due_at          = due_at,
+            created_by      = academy_user,
+            created_at      = timezone.now(),
+            updated_at      = timezone.now(),
+        )
 
-    return Response({
-        'message': 'Course assigned successfully.',
-        'assignment': {
-            'id':              assignment.id,
-            'course_title':    course.title,
-            'assignment_type': assignment_type,
-            'target_value':    target_value,
-            'mandatory':       mandatory,
-        }
-    }, status=201)
+        if assignment_type == 'all':
+            if academy_user.role == 'area_manager':
+                assigned_location_ids = SuperAdminLocations.objects.filter(
+                    user=academy_user
+                ).values_list('location_id', flat=True)
+                users = Users.objects.filter(
+                    status='active',
+                    location_id__in=assigned_location_ids,
+                    role__in=['educator', 'branch_manager']
+                )
+            else:
+                users = Users.objects.filter(
+                    status='active',
+                    role__in=['educator', 'branch_manager', 'area_manager']
+                )
+        elif assignment_type == 'filtered':
+            users = Users.objects.filter(id__in=target_users, status='active')
+        elif assignment_type == 'user':
+            try:
+                specific_user = Users.objects.get(id=int(target_value), status='active')
+                users = [specific_user]
+            except Users.DoesNotExist:
+                users = []
+        else:
+            users = Users.objects.filter(role=target_value, status='active')
+
+        enrolled_count = 0
+        for user in users:
+            already_enrolled = Enrolments.objects.filter(user=user, course=course).exists()
+            if not already_enrolled:
+                Enrolments.objects.create(
+                    user       = user,
+                    course     = course,
+                    source     = 'assignment',
+                    status     = 'not_started',
+                    created_at = timezone.now(),
+                    updated_at = timezone.now(),
+                )
+                enrolled_count += 1
+                create_notification(
+                    recipient  = user,
+                    notif_type = 'general',
+                    title      = 'New Course Assigned',
+                    message    = f'You have been assigned the course "{course.title}".' +
+                                 (' This course is mandatory.' if mandatory else '')
+                )
+                send_assignment_reminder_email(user, course, assignment)
+
+        return Response({
+            'message': f'Course assigned successfully to {enrolled_count} user(s).',
+            'assignment': {
+                'id':              assignment.id,
+                'course_title':    course.title,
+                'assignment_type': assignment_type,
+                'mandatory':       mandatory,
+            }
+        }, status=201)
+
+    except Exception as e:
+        print("ERROR IN CREATE ASSIGNMENT:", str(e))
+        import traceback
+        traceback.print_exc()
+        return Response({'error': str(e)}, status=500)
 
 
 @api_view(['DELETE'])

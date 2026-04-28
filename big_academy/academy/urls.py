@@ -4,18 +4,24 @@ from . import views
 urlpatterns = [
 
     # AUTH
-    path('auth/login/',          views.login,         name='login'),
-    path('auth/logout/',         views.logout,        name='logout'),
-    path('auth/me/',             views.my_profile,    name='my-profile'),
+    path('auth/login/',           views.login,           name='login'),
+    path('auth/logout/',          views.logout,          name='logout'),
+    path('auth/me/',              views.my_profile,      name='my-profile'),
+    path('auth/change-password/', views.change_password, name='change-password'),
+
+    # LOCATIONS
+    path('locations/', views.list_locations, name='list-locations'),
 
     # USER MANAGEMENT
     path('users/register/',                    views.register_user,  name='register-user'),
+    path('users/<int:user_id>/update/',        views.update_user,    name='update-user'),
     path('users/<int:user_id>/offboard/',      views.offboard_user,  name='offboard-user'),
     path('users/', views.list_users, name='list-users'),
 
     # COURSES
     path('courses/',                           views.course_list_create, name='course-list-create'),
     path('courses/<int:course_id>/',           views.course_detail,      name='course-detail'),
+    path('courses/<int:course_id>/publish/', views.publish_course, name='publish-course'),
     path('courses/<int:course_id>/certificate/generate/', views.generate_certificate, name='generate-certificate'),
 
     # MODULES
@@ -23,6 +29,7 @@ urlpatterns = [
 
     # LESSONS
     path('modules/<int:module_id>/lessons/',   views.lesson_create,  name='lesson-create'),
+    path('lessons/upload/', views.lesson_file_upload, name='lesson-upload'),
 
     # QUIZZES
     path('courses/<int:course_id>/quizzes/',   views.quiz_create,    name='quiz-create'),
@@ -74,7 +81,7 @@ urlpatterns = [
     path('assignments/',                        views.list_assignments,   name='list-assignments'),
     path('assignments/create/',                 views.create_assignment,  name='create-assignment'),
     path('assignments/<int:assignment_id>/delete/', views.delete_assignment, name='delete-assignment'),
-
+    path('assignments/preview/', views.preview_assignment_users, name='assignment-preview'),
     # REPORTS
     path('reports/completion/', views.report_completion, name='report-completion'),
     path('reports/staff/',      views.report_staff,      name='report-staff'),

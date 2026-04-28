@@ -127,10 +127,10 @@ export default function CoursesManager({ accentColor = '#1a1f8c' }) {
       return <span style={{ fontSize: '0.72rem', fontWeight: '700', padding: '3px 9px', borderRadius: '20px', background: c.bg, color: c.color, border: `1px solid ${c.border}` }}>{c.label}</span>;
     },
     actionBtn: (bg, color, border) => ({
-      display: 'inline-flex', alignItems: 'center', gap: '4px',
-      padding: '5px 10px', fontSize: '0.78rem', fontWeight: '600',
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      padding: '6px', width: '30px', height: '30px',
       background: bg, color, border: `1px solid ${border}`,
-      borderRadius: '6px', cursor: 'pointer', marginRight: '6px',
+      borderRadius: '6px', cursor: 'pointer', marginRight: '4px',
     }),
   };
 
@@ -205,13 +205,14 @@ export default function CoursesManager({ accentColor = '#1a1f8c' }) {
                 <td style={{ ...S.td, color: '#64748b' }}>{course.estimated_minutes ? `${course.estimated_minutes} mins` : '—'}</td>
                 <td style={{ ...S.td, color: '#64748b' }}>{course.expiry_months ? `${course.expiry_months} months` : 'No expiry'}</td>
                 <td style={S.td}>
-                  <button style={S.actionBtn('#f8fafc', '#475569', '#e2e8f0')} onClick={() => setManagingCourse(course)}>
-                    <BookOpen size={12} /> Manage
+                  <button title="Manage" style={S.actionBtn('#f8fafc', '#475569', '#e2e8f0')} onClick={() => setManagingCourse(course)}>
+                    <BookOpen size={14} />
                   </button>
-                  <button style={S.actionBtn('#eff6ff', '#2563eb', '#bfdbfe')} onClick={() => handleEdit(course)}>
-                    <Edit size={12} /> Edit
+                  <button title="Edit" style={S.actionBtn('#eff6ff', '#2563eb', '#bfdbfe')} onClick={() => handleEdit(course)}>
+                    <Edit size={14} />
                   </button>
                   <button
+                    title={course.status === 'published' ? 'Unpublish' : 'Publish'}
                     style={S.actionBtn(
                       course.status === 'published' ? '#fefce8' : '#f0fdf4',
                       course.status === 'published' ? '#d97706' : '#059669',
@@ -219,10 +220,10 @@ export default function CoursesManager({ accentColor = '#1a1f8c' }) {
                     )}
                     onClick={() => handlePublishToggle(course)}
                   >
-                    {course.status === 'published' ? <><EyeOff size={12} /> Unpublish</> : <><Eye size={12} /> Publish</>}
+                    {course.status === 'published' ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
-                  <button style={S.actionBtn('#fef2f2', '#ef4444', '#fecaca')} onClick={() => handleArchive(course)}>
-                    <Archive size={12} /> Archive
+                  <button title="Archive" style={S.actionBtn('#fef2f2', '#ef4444', '#fecaca')} onClick={() => handleArchive(course)}>
+                    <Archive size={14} />
                   </button>
                 </td>
               </tr>

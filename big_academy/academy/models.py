@@ -150,6 +150,7 @@ class Assignments(models.Model):
     created_by      = models.ForeignKey(Users, models.DO_NOTHING, db_column='created_by')
     created_at      = models.DateTimeField()
     updated_at      = models.DateTimeField()
+    is_active       = models.BooleanField(default=True)
 
     def __str__(self):
         return f"{self.course} — {self.assignment_type} (mandatory: {self.mandatory})"

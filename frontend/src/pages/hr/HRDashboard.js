@@ -11,11 +11,14 @@ import HRUnlockRequests from './HRUnlockRequests';
 import HRReports from './HRReports';
 import NotificationBell from '../../components/NotificationBell';
 import NotificationsPage from '../shared/NotificationsPage';
+import HRCertificates from './HRCertificates';
+import HRTemplates from './HRTemplates';
 import {
   LayoutDashboard, Users, Unlock, BarChart2,
   BookOpen, ClipboardList, GraduationCap,
   LogOut, ChevronLeft, ChevronRight,
   UserCheck, ShieldCheck, TrendingUp, Bell,
+  Award, ChevronDown, FileText, LayoutTemplate,
 } from 'lucide-react';
 
 const SIDEBAR_ITEMS = [
@@ -37,7 +40,16 @@ export default function HRDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const activeItem = SIDEBAR_ITEMS.find(i => location.pathname.startsWith(i.path)) || SIDEBAR_ITEMS[0];
+  const [certOpen, setCertOpen] = useState(false);
+
+  const CERT_ITEMS = {
+    '/hr/certification/certificates': { key: 'cert-certificates', icon: FileText,       label: 'Certificate'           },
+    '/hr/certification/templates':    { key: 'cert-templates',    icon: LayoutTemplate, label: 'Certificate Templates' },
+  };
+
+  const activeItem = CERT_ITEMS[location.pathname]
+    || SIDEBAR_ITEMS.find(i => location.pathname.startsWith(i.path))
+    || SIDEBAR_ITEMS[0];
   const isExecutive = user.is_hr_executive;
 
   useEffect(() => {
@@ -404,6 +416,38 @@ export default function HRDashboard() {
               )}
             </div>
           ))}
+
+          {/* Certification dropdown */}
+          <div
+            style={S.navItem(location.pathname.startsWith('/hr/certification'))}
+            onClick={() => sidebarOpen ? setCertOpen(o => !o) : navigate('/hr/certification/certificates')}
+          >
+            <Award size={18} style={{ flexShrink: 0 }} />
+            {sidebarOpen && <span style={S.navText}>Certification</span>}
+            {sidebarOpen && (
+              <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+                {certOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </span>
+            )}
+          </div>
+          {sidebarOpen && certOpen && (
+            <>
+              <div
+                style={{ ...S.navItem(location.pathname === '/hr/certification/certificates'), paddingLeft: '38px' }}
+                onClick={() => navigate('/hr/certification/certificates')}
+              >
+                <FileText size={16} style={{ flexShrink: 0 }} />
+                <span style={S.navText}>Certificate</span>
+              </div>
+              <div
+                style={{ ...S.navItem(location.pathname === '/hr/certification/templates'), paddingLeft: '38px' }}
+                onClick={() => navigate('/hr/certification/templates')}
+              >
+                <LayoutTemplate size={16} style={{ flexShrink: 0 }} />
+                <span style={S.navText}>Templates</span>
+              </div>
+            </>
+          )}
         </div>
 
         <div style={S.sidebarFooter}>
@@ -449,7 +493,9 @@ export default function HRDashboard() {
           {activeItem?.key === 'requests'        && <HRUnlockRequests />}
           {activeItem?.key === 'reports'         && <HRReports />}
           {activeItem?.key === 'grading'         && <QuizGrading accentColor="#b5132a" />}
-          {activeItem?.key === 'notifications'   && <NotificationsPage />}
+          {activeItem?.key === 'notifications'       && <NotificationsPage />}
+          {activeItem?.key === 'cert-certificates' && <HRCertificates />}
+          {activeItem?.key === 'cert-templates'    && <HRTemplates />}
         </div>
       </div>
     </div>

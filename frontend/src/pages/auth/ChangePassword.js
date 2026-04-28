@@ -18,7 +18,7 @@ export default function ChangePassword() {
   const [loading, setLoading]             = useState(false);
 
   if (!token || !user) {
-    navigate('/login');
+    navigate('/bigacademy-login2026');
     return null;
   }
 

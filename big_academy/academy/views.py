@@ -1909,16 +1909,32 @@ def list_assignments(request):
         return Response({'error': 'Access denied.'}, status=403)
 
     assignments = Assignments.objects.all().select_related('course', 'created_by')
-    data = [{
-        'id':              a.id,
-        'course_id':       a.course.id,
-        'course_title':    a.course.title,
-        'assignment_type': a.assignment_type,
-        'target_value':    a.target_value,
-        'mandatory':       a.mandatory,
-        'due_at':          a.due_at,
-        'created_at':      a.created_at,
-    } for a in assignments]
+    data = []
+    for a in assignments:
+        # Get enrolled users for this assignment
+        enrolments = Enrolments.objects.filter(
+            course=a.course, source='assignment'
+        ).select_related('user', 'user__location')
+        
+        enrolled_users = [{
+            'id':       e.user.id,
+            'name':     f"{e.user.first_name} {e.user.last_name}",
+            'role':     e.user.role,
+            'location': e.user.location.name if e.user.location else '—',
+        } for e in enrolments]
+
+        data.append({
+            'id':              a.id,
+            'course_id':       a.course.id,
+            'course_title':    a.course.title,
+            'assignment_type': a.assignment_type,
+            'target_value':    a.target_value,
+            'mandatory':       a.mandatory,
+            'due_at':          a.due_at,
+            'created_at':      a.created_at,
+            'is_active':       a.is_active,
+            'enrolled_users':  enrolled_users,
+        })
     return Response(data, status=200)
 
 
@@ -2018,6 +2034,18 @@ def create_assignment(request):
         traceback.print_exc()
         return Response({'error': str(e)}, status=500)
 
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def edit_assignment(request, assignment_id):
+    academy_user = get_academy_user(request)
+    if not academy_user or academy_user.role not in CONTENT_ROLES:
+        return Response({'error': 'Access denied.'}, status=403)
+    assignment = get_object_or_404(Assignments, id=assignment_id)
+    assignment.mandatory  = request.data.get('mandatory', assignment.mandatory)
+    assignment.due_at     = request.data.get('due_at') or None
+    assignment.updated_at = timezone.now()
+    assignment.save()
+    return Response({'message': 'Assignment updated.'}, status=200)
 
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
@@ -2047,6 +2075,25 @@ def delete_assignment(request, assignment_id):
     assignment.delete()
     return Response({'message': 'Assignment and related enrolments removed.'}, status=200)
 
+# ============================================================
+# TOGGLE ASSIGNMENT
+# ============================================================
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def toggle_assignment(request, assignment_id):
+    academy_user = get_academy_user(request)
+    if not academy_user or academy_user.role not in CONTENT_ROLES:
+        return Response({'error': 'Access denied.'}, status=403)
+    
+    assignment = get_object_or_404(Assignments, id=assignment_id)
+    assignment.is_active = not assignment.is_active
+    assignment.updated_at = timezone.now()
+    assignment.save()
+    
+    return Response({
+        'message': f'Assignment {"enabled" if assignment.is_active else "disabled"}.',
+        'is_active': assignment.is_active
+    }, status=200)
 
 # ============================================================
 # CERTIFICATE GENERATION

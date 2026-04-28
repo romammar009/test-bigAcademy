@@ -86,4 +86,7 @@ urlpatterns = [
     path('reports/completion/', views.report_completion, name='report-completion'),
     path('reports/staff/',      views.report_staff,      name='report-staff'),
 
+    # TOGGLE ENDPOINT
+    path('assignments/<int:assignment_id>/toggle/', views.toggle_assignment, name='toggle-assignment'),
+    path('assignments/<int:assignment_id>/edit/', views.edit_assignment, name='edit-assignment'),
 ]

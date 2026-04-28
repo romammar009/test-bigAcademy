@@ -63,17 +63,17 @@ export default function AreaManagerDashboard() {
   const handleLogout = async () => {
     try { await API.post('/auth/logout/'); } catch (err) {}
     logout();
-    navigate('/login');
+    navigate('/bigacademy-login2026');
   };
 
   const S = {
     layout: {
-      display: 'flex', minHeight: '100vh',
+      display: 'flex', height: '100vh', overflow: 'hidden',
       fontFamily: "'Segoe UI', 'Helvetica Neue', sans-serif",
     },
     sidebar: {
       width: sidebarOpen ? '240px' : '68px',
-      minHeight: '100vh',
+      height: '100vh',
       background: 'linear-gradient(180deg, #0a0d4a 0%, #1a1f8c 100%)',
       display: 'flex', flexDirection: 'column',
       transition: 'width 0.25s ease',

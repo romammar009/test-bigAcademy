@@ -98,14 +98,29 @@ export default function AdminCourseBuilder({ course, onBack }) {
 
   const handleAddLesson = async (e) => {
     e.preventDefault(); setSavingLesson(true);
-    try { await API.post(`/modules/${activeLessonModule}/lessons/`, lessonForm); showMsg('Lesson added.'); setLessonForm({ title: '', content_type: 'video', content_url: '', duration_seconds: '', sort_order: 1 }); setActiveLessonModule(null); fetchModules(); }
-    catch { showMsg('Could not add lesson.', 'error'); } finally { setSavingLesson(false); }
-  };
+      try {
+        await API.post(`/modules/${activeLessonModule}/lessons/`, {
+          ...lessonForm,
+          duration_seconds: lessonForm.duration_seconds || null,
+        });
+        showMsg('Lesson added.');
+        setLessonForm({ title: '', content_type: 'video', content_url: '', duration_seconds: '', sort_order: 1 });
+        setActiveLessonModule(null);
+        fetchModules();
+      } catch { showMsg('Could not add lesson.', 'error'); } finally { setSavingLesson(false); }
+    };
 
   const handleEditLesson = async (e) => {
     e.preventDefault(); setSavingLesson(true);
-    try { await API.patch(`/lessons/${editingLesson.id}/edit/`, lessonForm); showMsg('Lesson updated.'); setEditingLesson(null); fetchModules(); }
-    catch { showMsg('Could not update lesson.', 'error'); } finally { setSavingLesson(false); }
+    try {
+      await API.patch(`/lessons/${editingLesson.id}/edit/`, {
+        ...lessonForm,
+        duration_seconds: lessonForm.duration_seconds || null,
+      });
+      showMsg('Lesson updated.');
+      setEditingLesson(null);
+      fetchModules();
+    } catch { showMsg('Could not update lesson.', 'error'); } finally { setSavingLesson(false); }
   };
 
   const handleDeleteLesson = async (lesson) => {

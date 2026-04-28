@@ -5,21 +5,18 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import API from '../../api/axios';
 import NotificationBell from '../../components/NotificationBell';
 import logo from '../../BigChildcare-Logo.png';
-import BrowseCourses from '../educator/AssignedCourses';
 import MyLearning from '../educator/MyLearning';
 import MyCertificates from '../educator/MyCertificates';
 import {
   LayoutDashboard, BookOpen, GraduationCap, Award,
   LogOut, ChevronLeft, ChevronRight,
-  BookMarked, PlayCircle, CheckCircle, Bell,
+  BookMarked, PlayCircle, CheckCircle,
 } from 'lucide-react';
 
 const SIDEBAR_ITEMS = [
   { key: 'dashboard',     icon: LayoutDashboard, label: 'Dashboard'        },
-  { key: 'courses',       icon: BookOpen,        label: 'Assigned Courses' },
   { key: 'learning',      icon: GraduationCap,   label: 'My Learning'      },
   { key: 'certificates',  icon: Award,           label: 'Certificates'     },
-  { key: 'notifications', icon: Bell,            label: 'Notifications'    },
 ];
 
 export default function AdminDashboard() {
@@ -52,17 +49,17 @@ export default function AdminDashboard() {
   const handleLogout = async () => {
     try { await API.post('/auth/logout/'); } catch (err) {}
     logout();
-    navigate('/login');
+    navigate('/bigacademy-login2026');
   };
 
   const S = {
     layout: {
-      display: 'flex', minHeight: '100vh',
+      display: 'flex', height: '100vh', overflow: 'hidden',
       fontFamily: "'Segoe UI', 'Helvetica Neue', sans-serif",
     },
     sidebar: {
       width: sidebarOpen ? '240px' : '68px',
-      minHeight: '100vh',
+      height: '100vh',
       background: 'linear-gradient(180deg, #78350f 0%, #b45309 100%)',
       display: 'flex', flexDirection: 'column',
       transition: 'width 0.25s ease',
@@ -307,7 +304,6 @@ export default function AdminDashboard() {
 
         <div style={S.content}>
           {activeTab === 'dashboard'     && <HomeDashboard />}
-          {activeTab === 'courses'       && <BrowseCourses />}
           {activeTab === 'learning'      && <MyLearning />}
           {activeTab === 'certificates'  && <MyCertificates />}
           {activeTab === 'notifications' && <NotificationsPage />}

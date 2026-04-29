@@ -34,6 +34,7 @@ from .emails import (
     send_unlock_approved_email,
     send_unlock_denied_email,
     send_assignment_reminder_email,
+    send_password_reset_email,
 )
 from .serializers import (
     UserSerializer, RegisterUserSerializer, LocationSerializer,
@@ -93,8 +94,8 @@ def create_notification(recipient, notif_type, title, message):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login(request):
-    email    = request.data.get('email')
-    password = request.data.get('password')
+    email    = (request.data.get('email') or '').strip()
+    password = (request.data.get('password') or '').strip()
 
     if not email or not password:
         return Response(
@@ -331,6 +332,46 @@ def register_user(request):
         'user':             UserSerializer(new_user).data,
         'courses_assigned': enrolments_created,
     }, status=status.HTTP_201_CREATED)
+
+
+# ============================================================
+# RESET A USER'S PASSWORD — HR only
+# ============================================================
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def reset_user_password(request, user_id):
+    actor = get_academy_user(request)
+    if actor.role != 'hr':
+        return Response({'error': 'Not authorised.'}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        target = Users.objects.get(id=user_id)
+    except Users.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    if target.role == 'hr' and not actor.is_hr_executive:
+        return Response({'error': 'Only HR executives can reset another HR user\'s password.'}, status=status.HTTP_403_FORBIDDEN)
+
+    alphabet     = string.ascii_letters + string.digits
+    raw_password = ''.join(secrets.choice(alphabet) for _ in range(10))
+    hashed = bcrypt.hashpw(raw_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+    target.password_hash            = hashed
+    target.must_change_password     = True
+    target.temp_password_expires_at = timezone.now() + timedelta(hours=24)
+    target.updated_at               = timezone.now()
+    target.save(update_fields=['password_hash', 'must_change_password', 'temp_password_expires_at', 'updated_at'])
+
+    # Invalidate any existing auth token so the user must log in fresh
+    try:
+        django_user = DjangoUser.objects.get(username=target.email)
+        Token.objects.filter(user=django_user).delete()
+    except DjangoUser.DoesNotExist:
+        pass
+
+    send_password_reset_email(target, raw_password)
+
+    return Response({'message': f'Password reset and emailed to {target.email}.'}, status=status.HTTP_200_OK)
 
 
 # ============================================================

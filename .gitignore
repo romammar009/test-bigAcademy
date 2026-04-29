@@ -21,6 +21,7 @@ dist/
 
 # Claude AI
 .claude/
+CLAUDE.md
 
 # VSCode
 .vscode/

@@ -1525,8 +1525,12 @@ def list_unlock_requests(request):
             user__location_id__in=assigned_location_ids
         )
     elif academy_user.role == 'hr':
-        pass  # HR sees all pending unlock requests regardless of role
-
+      role_filter = request.query_params.get('role', 'area_manager')
+      if role_filter in ['area_manager', 'branch_manager', 'educator', 'hr']:
+          requests = requests.filter(user__role=role_filter)
+      else:
+        requests = requests.filter(user__role='area_manager')
+        
     data = []
     for req in requests:
         data.append({

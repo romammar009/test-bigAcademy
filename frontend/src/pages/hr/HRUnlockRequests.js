@@ -8,11 +8,13 @@ export default function HRUnlockRequests() {
   const [message, setMessage]     = useState({ text: '', type: '' });
   const [denyModal, setDenyModal] = useState(null);
   const [denyNote, setDenyNote]   = useState('');
+  const [roleFilter, setRoleFilter] = useState('area_manager');
 
-  useEffect(() => { fetchRequests(); }, []);
+  useEffect(() => { fetchRequests(roleFilter); }, [roleFilter]);
 
-  const fetchRequests = () => {
-    API.get('/unlock-requests/')
+  const fetchRequests = (role = roleFilter) => {
+    setLoading(true);
+    API.get(`/unlock-requests/?role=${role}`)
       .then(res => setRequests(res.data))
       .catch(err => console.error(err))
       .finally(() => setLoading(false));
@@ -95,9 +97,25 @@ export default function HRUnlockRequests() {
 
   return (
     <div>
-      <div style={S.title}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div style={{ ...S.title, marginBottom: 0 }}>
         <Unlock size={18} color="#1a1f8c" />
-        Quiz Unlock Requests
+         Quiz Unlock Requests
+        </div>
+        <select
+          value={roleFilter}
+          onChange={e => setRoleFilter(e.target.value)}
+          style={{
+            padding: '7px 12px', borderRadius: '8px', border: '1px solid #e2e8f0',
+            fontSize: '0.85rem', color: '#1e293b', background: '#fff',
+            fontFamily: 'inherit', cursor: 'pointer',
+          }}
+        >
+          <option value="area_manager">Area Manager</option>
+          <option value="branch_manager">Branch Manager</option>
+          <option value="educator">Educator</option>
+          <option value="hr">HR</option>
+        </select>
       </div>
 
       {message.text && <div style={S.message(message.type)}>{message.text}</div>}
@@ -112,7 +130,7 @@ export default function HRUnlockRequests() {
           <table style={S.table}>
             <thead>
               <tr>
-                {['Staff Member', 'Quiz', 'Reason', 'Requested', 'Actions'].map(h => (
+                {['Staff Member', 'Role', 'Quiz', 'Reason', 'Requested', 'Actions'].map(h => (
                   <th key={h} style={S.th}>{h}</th>
                 ))}
               </tr>
@@ -121,6 +139,11 @@ export default function HRUnlockRequests() {
               {requests.map(req => (
                 <tr key={req.id}>
                   <td style={{ ...S.td, ...S.nameTd }}>{req.user_name}</td>
+                  <td style={S.td}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: '600', padding: '2px 8px', borderRadius: '20px', background: '#eef1ff', color: '#1a1f8c', border: '1px solid #c7d2fe' }}>
+                      {req.user_role === 'area_manager' ? 'Area Manager' : req.user_role === 'branch_manager' ? 'Branch Manager' : req.user_role === 'hr' ? 'HR' : 'Educator'}
+                    </span>
+                  </td>
                   <td style={S.td}>{req.quiz_title}</td>
                   <td style={{ ...S.td, ...S.reasonTd }}>{req.reason}</td>
                   <td style={S.td}>

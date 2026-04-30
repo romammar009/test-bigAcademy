@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import API from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
-import { Users, Plus, X, UserMinus, Pencil, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Users, Plus, X, UserMinus, Pencil, AlertTriangle, CheckCircle, KeyRound } from 'lucide-react';
 
 const BLANK_FORM = { email: '', first_name: '', last_name: '', role: 'educator', phone_number: '', location_id: '', location_ids: [] };
 const ROLE_LABELS = { hr: 'HR', area_manager: 'Area Manager', branch_manager: 'Branch Manager', educator: 'Educator' };
@@ -29,6 +29,10 @@ export default function HRManageUsers({ isExecutive }) {
 
   // Offboard confirm modal
   const [offboardTarget, setOffboardTarget] = useState(null);
+
+  // Reset password confirm modal
+  const [resetTarget, setResetTarget]     = useState(null);
+  const [resetLoading, setResetLoading]   = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -94,6 +98,22 @@ export default function HRManageUsers({ isExecutive }) {
     }
   };
 
+  // ── Reset Password ────────────────────────────────────────
+  const handleResetPassword = async () => {
+    if (!resetTarget) return;
+    setResetLoading(true);
+    try {
+      await API.post(`/users/${resetTarget.id}/reset-password/`);
+      setMessage({ text: `A new temporary password has been emailed to ${resetTarget.email}.`, type: 'success' });
+      setResetTarget(null);
+    } catch (err) {
+      setMessage({ text: err.response?.data?.error || 'Could not reset password.', type: 'error' });
+      setResetTarget(null);
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   // ── Offboard ─────────────────────────────────────────────
   const handleOffboard = async () => {
     if (!offboardTarget) return;
@@ -136,7 +156,8 @@ export default function HRManageUsers({ isExecutive }) {
     execBadge:  { fontSize: '0.62rem', fontWeight: '700', padding: '2px 6px', borderRadius: '10px', background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca' },
     statusBadge:(active) => ({ fontSize: '0.72rem', fontWeight: '600', padding: '3px 9px', borderRadius: '20px', background: active ? '#f0fdf4' : '#f8fafc', color: active ? '#059669' : '#94a3b8', border: `1px solid ${active ? '#bbf7d0' : '#e2e8f0'}` }),
     editBtn:    { padding: '5px 10px', fontSize: '0.78rem', fontWeight: '600', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', marginRight: '6px' },
-    offBtn:     { padding: '5px 10px', fontSize: '0.78rem', fontWeight: '600', background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' },
+    offBtn:     { padding: '5px 10px', fontSize: '0.78rem', fontWeight: '600', background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', marginRight: '6px' },
+    resetBtn:   { padding: '5px 10px', fontSize: '0.78rem', fontWeight: '600', background: '#fefce8', color: '#d97706', border: '1px solid #fde68a', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' },
     // Modal shared
     overlay:    { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '24px' },
     modal:      { background: '#fff', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '480px', boxShadow: '0 20px 60px rgba(0,0,0,0.18)', maxHeight: '90vh', overflowY: 'auto' },
@@ -246,6 +267,7 @@ export default function HRManageUsers({ isExecutive }) {
                 <td style={S.td}>
                   {canEdit(u) && <button style={S.editBtn} onClick={() => openEdit(u)}><Pencil size={12} /> Edit</button>}
                   {canOffboard(u) && <button style={S.offBtn} onClick={() => setOffboardTarget(u)}><UserMinus size={12} /> Offboard</button>}
+                  {canEdit(u) && <button style={S.resetBtn} onClick={() => setResetTarget(u)}><KeyRound size={12} /> Change Password</button>}
                   {!canEdit(u) && !canOffboard(u) && <span style={{ color: '#cbd5e1' }}>—</span>}
                 </td>
               </tr>
@@ -307,6 +329,34 @@ export default function HRManageUsers({ isExecutive }) {
                 <button type="submit" style={S.saveBtn} disabled={editSaving}>{editSaving ? 'Saving…' : 'Save Changes'}</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Reset password confirm modal ── */}
+      {resetTarget && (
+        <div style={S.overlay} onClick={e => e.target === e.currentTarget && setResetTarget(null)}>
+          <div style={{ ...S.modal, maxWidth: '400px' }}>
+            <div style={{ textAlign: 'center', padding: '8px 0 20px' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#fefce8', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                <KeyRound size={26} color="#d97706" />
+              </div>
+              <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#0f172a', marginBottom: '8px' }}>Reset Password?</div>
+              <div style={{ fontSize: '0.875rem', color: '#64748b', lineHeight: '1.5' }}>
+                A new temporary password will be generated and emailed to <strong>{resetTarget.first_name} {resetTarget.last_name}</strong> at <strong>{resetTarget.email}</strong>.<br /><br />
+                They will be required to change it on next login.
+              </div>
+            </div>
+            <div style={S.modalBtns}>
+              <button style={S.cancelBtn} onClick={() => setResetTarget(null)} disabled={resetLoading}>Cancel</button>
+              <button
+                style={{ ...S.saveBtn, background: '#d97706', opacity: resetLoading ? 0.7 : 1 }}
+                onClick={handleResetPassword}
+                disabled={resetLoading}
+              >
+                {resetLoading ? 'Sending…' : 'Yes, Reset Password'}
+              </button>
+            </div>
           </div>
         </div>
       )}

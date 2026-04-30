@@ -18,8 +18,6 @@ export default function MyLearning() {
         res.data.forEach(enrolment => {
           if (enrolment.status === 'completed') {
             setProgress(prev => ({ ...prev, [enrolment.course.id]: 100 }));
-          } else if (enrolment.status === 'not_started') {
-            setProgress(prev => ({ ...prev, [enrolment.course.id]: 0 }));
           } else {
             API.get(`/courses/${enrolment.course.id}/progress/`)
               .then(r => setProgress(prev => ({

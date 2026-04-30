@@ -109,7 +109,7 @@ export default function HRReports() {
           <table style={S.table}>
             <thead>
               <tr>
-                {['Name', 'Email', 'Location', 'Completed', 'In Progress', 'Not Started', 'Flags'].map(h => (
+                {['Name', 'Role', 'Email', 'Location', 'Completed', 'In Progress', 'Not Started', 'Flags'].map(h => (
                   <th key={h} style={S.th}>{h}</th>
                 ))}
               </tr>
@@ -118,6 +118,11 @@ export default function HRReports() {
               {staffData.map(staff => (
                 <tr key={staff.user_id}>
                   <td style={{ ...S.td, ...S.nameTd }}>{staff.name}</td>
+                  <td style={S.td}>
+                    <span style={S.badge(staff.role === 'branch_manager' ? 'warning' : 'neutral')}>
+                      {staff.role === 'branch_manager' ? 'Branch Manager' : 'Educator'}
+                    </span>
+                  </td>
                   <td style={{ ...S.td, color: '#64748b', fontSize: '0.82rem' }}>{staff.email}</td>
                   <td style={{ ...S.td, color: '#64748b' }}>{staff.location}</td>
                   <td style={S.td}><span style={S.badge('success')}>{staff.completed}</span></td>

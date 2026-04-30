@@ -17,6 +17,7 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
   const [step, setStep]                   = useState(1);
   const [viewModal, setViewModal]         = useState(null);
   const [editingAssignment, setEditingAssignment] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
 
   const [form, setForm] = useState({
     course_id: '', assignment_type: 'all', mandatory: true, due_at: '',
@@ -134,18 +135,35 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
   };
 
   const handleEditSave = async () => {
-    try {
-      await API.patch(`/assignments/${editingAssignment.id}/edit/`, editForm);
-      showMsg('Assignment updated.');
+    if (!form.course_id) { showMsg('Please select a course.', 'error'); return; }
+    if (form.assignment_type === 'filtered' && selectedUsers.length === 0) {
+      showMsg('Please select at least one user.', 'error'); return;
+    }
+    setSaving(true);
+      try {
+        await API.patch(`/assignments/${editingAssignment.id}/edit/`, {
+        course_id:       form.course_id,
+        assignment_type: form.assignment_type,
+        target_users:    form.assignment_type === 'filtered' ? selectedUsers : [],
+        mandatory:       form.mandatory,
+        due_at:          form.due_at || null,
+      });
+      showMsg('Assignment updated successfully.');
       setEditingAssignment(null);
+      setIsEditing(false);
+      resetForm();
       fetchData();
     } catch (err) {
       showMsg('Could not update assignment.', 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
   const resetForm = () => {
     setShowForm(false);
+    setIsEditing(false);
+    setEditingAssignment(null);
     setStep(1);
     setForm({ course_id: '', assignment_type: 'all', mandatory: true, due_at: '' });
     setFilters({ location_ids: [], roles: [] });
@@ -322,7 +340,7 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
         <div style={S.formCard}>
           {step === 1 && (
             <>
-              <div style={S.formTitle}>New Assignment</div>
+              <div style={S.formTitle}>{isEditing ? 'Edit Assignment' : 'New Assignment'}</div>
               <div style={S.formGroup}>
                 <label style={S.label}>Course</label>
                 <select style={S.select} value={form.course_id}
@@ -390,8 +408,8 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
                     {previewing ? 'Loading...' : <><Users size={14} style={{ marginRight: '6px' }} /> Preview Users</>}
                   </button>
                 ) : (
-                  <button style={S.submitBtn(!form.course_id || saving)} onClick={handleSubmit} disabled={!form.course_id || saving}>
-                    {saving ? 'Assigning...' : 'Assign to All Staff'}
+                  <button style={S.submitBtn(!form.course_id || saving)} onClick={isEditing ? handleEditSave : handleSubmit} disabled={!form.course_id || saving}>
+                    {saving ? 'Saving...' : isEditing ? 'Save Changes' : 'Assign to All Staff'}
                   </button>
                 )}
               </div>
@@ -428,8 +446,8 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
               )}
               <div style={S.btnRow}>
                 <button style={S.backBtn} onClick={() => setStep(1)}>← Back</button>
-                <button style={S.submitBtn(selectedUsers.length === 0 || saving)} onClick={handleSubmit} disabled={selectedUsers.length === 0 || saving}>
-                  {saving ? 'Assigning...' : `Assign to ${selectedUsers.length} User(s)`}
+                <button style={S.submitBtn(selectedUsers.length === 0 || saving)} onClick={isEditing ? handleEditSave : handleSubmit} disabled={selectedUsers.length === 0 || saving}>
+                  {saving ? 'Saving...' : isEditing ? `Save Changes` : `Assign to ${selectedUsers.length} User(s)`}
                 </button>
               </div>
             </>
@@ -438,31 +456,6 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
       )}
 
       {/* ── Edit Assignment Modal ── */}
-      {editingAssignment && (
-        <div style={S.overlay} onClick={() => setEditingAssignment(null)}>
-          <div style={S.modal} onClick={e => e.stopPropagation()}>
-            <div style={S.modalHeader}>
-              <div style={S.modalTitle}>Edit Assignment</div>
-              <button onClick={() => setEditingAssignment(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}><X size={18} /></button>
-            </div>
-            <div style={S.formGroup}>
-              <label style={S.label}>Due Date (optional)</label>
-              <input type="date" style={S.input} value={editForm.due_at}
-                onChange={e => setEditForm({ ...editForm, due_at: e.target.value })} />
-            </div>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.875rem', color: '#374151', fontWeight: '500' }}>
-                <input type="checkbox" checked={editForm.mandatory}
-                  onChange={e => setEditForm({ ...editForm, mandatory: e.target.checked })}
-                  style={{ width: '16px', height: '16px' }} />
-                Mandatory
-              </label>
-            </div>
-            <button style={S.submitBtn(false)} onClick={handleEditSave}>Save Changes</button>
-          </div>
-        </div>
-      )}
-
       {/* ── Assigned To Modal ── */}
       {viewModal && (
         <div style={S.overlay} onClick={() => setViewModal(null)}>
@@ -550,12 +543,32 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
                   </td>
                   <td style={S.td}>
                     <button
-                      title="Edit assignment"
-                      style={S.iconBtn('#eff6ff', '#2563eb', '#bfdbfe')}
-                      onClick={() => { setEditingAssignment(a); setEditForm({ mandatory: a.mandatory, due_at: a.due_at ? a.due_at.split('T')[0] : '' }); }}
+                      title={a.is_active ? 'Disable to edit' : 'Edit assignment'}
+                      style={{
+                        ...S.iconBtn(
+                          a.is_active ? '#f1f5f9' : '#eff6ff',
+                          a.is_active ? '#cbd5e1' : '#2563eb',
+                          a.is_active ? '#e2e8f0' : '#bfdbfe'
+                        ),
+                        cursor: a.is_active ? 'not-allowed' : 'pointer',
+                      }}
+                      disabled={a.is_active}
+                      onClick={() => {
+                        if (a.is_active) return;
+                        setEditingAssignment(a);
+                        setIsEditing(true);
+                        setShowForm(true);
+                        setStep(1);
+                        setForm({
+                          course_id:       String(a.course_id),
+                          assignment_type: a.assignment_type,
+                          mandatory:       a.mandatory,
+                          due_at:          a.due_at ? a.due_at.split('T')[0] : '',
+                        });
+                      }}
                     >
-                      <Edit size={14} />
-                    </button>
+                  <Edit size={14} />
+                </button>
                     <button
                       title={a.is_active ? 'Disable assignment' : 'Enable assignment'}
                       style={S.iconBtn(a.is_active ? '#fefce8' : '#f0fdf4', a.is_active ? '#d97706' : '#059669', a.is_active ? '#fde68a' : '#bbf7d0')}

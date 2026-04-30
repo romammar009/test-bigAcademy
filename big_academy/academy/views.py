@@ -2094,12 +2094,62 @@ def edit_assignment(request, assignment_id):
     academy_user = get_academy_user(request)
     if not academy_user or academy_user.role not in CONTENT_ROLES:
         return Response({'error': 'Access denied.'}, status=403)
+    
     assignment = get_object_or_404(Assignments, id=assignment_id)
-    assignment.mandatory  = request.data.get('mandatory', assignment.mandatory)
-    assignment.due_at     = request.data.get('due_at') or None
-    assignment.updated_at = timezone.now()
+    
+    course_id       = request.data.get('course_id', assignment.course.id)
+    assignment_type = request.data.get('assignment_type', assignment.assignment_type)
+    target_users    = request.data.get('target_users', [])
+    mandatory       = request.data.get('mandatory', assignment.mandatory)
+    due_at          = request.data.get('due_at') or None
+
+    try:
+        course = Courses.objects.get(id=course_id)
+    except Courses.DoesNotExist:
+        return Response({'error': 'Course not found.'}, status=404)
+
+    # Remove old enrolments linked to this assignment
+    Enrolments.objects.filter(course=assignment.course, source='assignment').delete()
+
+    # Update assignment
+    assignment.course          = course
+    assignment.assignment_type = assignment_type
+    assignment.mandatory       = mandatory
+    assignment.due_at          = due_at
+    assignment.updated_at      = timezone.now()
     assignment.save()
-    return Response({'message': 'Assignment updated.'}, status=200)
+
+    # Create new enrolments
+    if assignment_type == 'all':
+        if academy_user.role == 'area_manager':
+            assigned_location_ids = SuperAdminLocations.objects.filter(
+                user=academy_user
+            ).values_list('location_id', flat=True)
+            users = Users.objects.filter(
+                status='active',
+                location_id__in=assigned_location_ids,
+                role__in=['educator', 'branch_manager']
+            )
+        else:
+            users = Users.objects.filter(
+                status='active',
+                role__in=['educator', 'branch_manager', 'area_manager']
+            )
+    elif assignment_type == 'filtered':
+        users = Users.objects.filter(id__in=target_users, status='active')
+    else:
+        users = Users.objects.none()
+
+    for user in users:
+        Enrolments.objects.get_or_create(
+            user=user, course=course,
+            defaults={
+                'source': 'assignment', 'status': 'not_started',
+                'created_at': timezone.now(), 'updated_at': timezone.now(),
+            }
+        )
+
+    return Response({'message': 'Assignment updated successfully.'}, status=200)
 
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
@@ -2109,25 +2159,14 @@ def delete_assignment(request, assignment_id):
         return Response({'error': 'Access denied.'}, status=403)
 
     assignment = get_object_or_404(Assignments, id=assignment_id)
-
-    if assignment.assignment_type == 'user':
-        try:
-            target_user = Users.objects.get(id=int(assignment.target_value))
-            Enrolments.objects.filter(
-                user=target_user,
-                course=assignment.course,
-                source='assignment'
-            ).delete()
-        except Users.DoesNotExist:
-            pass
-    elif assignment.assignment_type == 'all':
-        Enrolments.objects.filter(
-            course=assignment.course,
-            source='assignment'
-        ).delete()
-
+    
+    # Hard delete all enrolments for this course from assignment source
+    Enrolments.objects.filter(course=assignment.course, source='assignment').delete()
+    
+    # Delete the assignment
     assignment.delete()
-    return Response({'message': 'Assignment and related enrolments removed.'}, status=200)
+    
+    return Response({'message': 'Assignment and all enrolments deleted.'}, status=200)
 
 # ============================================================
 # TOGGLE ASSIGNMENT

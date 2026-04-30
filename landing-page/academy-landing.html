@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Academy Portal — Big Childcare</title>
+<meta name="description" content="Choose your portal — Big Academy LMS or Staffhub Compliance Portal. Big Childcare's central learning and compliance hub." />
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    /* Pulled from the Big Academy & Staffhub logos */
+    --academy-blue:        #1a2e6e;
+    --academy-blue-deep:   #0d1b4a;
+    --academy-blue-glow:   #3b5fd1;
+    --academy-red-accent:  #e60f1f;
+
+    --staffhub-red:        #c8102e;
+    --staffhub-red-deep:   #8a0a1f;
+    --staffhub-red-glow:   #ff5a4d;
+    --staffhub-navy:       #14245c;
+
+    --ink:    #0c1124;
+    --paper:  #fbfaf6;
+    --muted:  rgba(255,255,255,0.82);
+    --display:"Bricolage Grotesque", serif;
+    --body:   "DM Sans", sans-serif;
+  }
+
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html, body{height:100%;}
+  body{
+    font-family: var(--body);
+    color: var(--ink);
+    background: var(--paper);
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- HEADER ---------- */
+  .topbar{
+    position: absolute; top:0; left:0; right:0; z-index:50;
+    display:flex; justify-content:space-between; align-items:center;
+    padding: 22px 40px;
+    color: white;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .topbar .brand{
+    display:flex; align-items:center; gap:10px;
+    font-weight:600;
+  }
+  .topbar .brand .dot{
+    width:8px; height:8px; border-radius:50%;
+    background: white;
+    box-shadow: 0 0 0 4px rgba(255,255,255,0.18);
+  }
+  .topbar a.back{
+    color: white; text-decoration: none; opacity:.85;
+    transition: opacity .25s;
+  }
+  .topbar a.back:hover{ opacity:1; }
+
+  /* ---------- SPLIT HERO ---------- */
+  .split{
+    display:flex;
+    width:100%;
+    height: 100vh;
+    min-height: 760px;
+    position: relative;
+    overflow:hidden;
+  }
+  .panel{
+    flex: 1 1 50%;
+    position: relative;
+    display:flex; align-items:center; justify-content:center;
+    padding: 40px;
+    color: white;
+    transition: flex 0.7s cubic-bezier(.77,0,.18,1);
+    overflow:hidden;
+  }
+  .split:hover .panel{ flex: 1 1 35%; }
+  .split .panel:hover{ flex: 1 1 65%; }
+
+  /* Backgrounds */
+  .panel.academy{
+    background:
+      radial-gradient(1200px 700px at 20% 30%, rgba(59,95,209,0.45), transparent 60%),
+      linear-gradient(140deg, var(--academy-blue-deep) 0%, var(--academy-blue) 60%, #2a44a8 100%);
+  }
+  .panel.staffhub{
+    background:
+      radial-gradient(1200px 700px at 80% 30%, rgba(255,90,77,0.35), transparent 60%),
+      linear-gradient(220deg, var(--staffhub-red-deep) 0%, var(--staffhub-red) 60%, #e6182f 100%);
+  }
+
+  /* Decorative shapes */
+  .shape{
+    position:absolute;
+    border-radius: 50%;
+    filter: blur(2px);
+    opacity:.16;
+    pointer-events:none;
+    animation: drift 14s ease-in-out infinite;
+  }
+  .panel.academy .shape.s1{ width:340px; height:340px; background:#a9c1ff; top:-80px; left:-80px;}
+  .panel.academy .shape.s2{ width:180px; height:180px; background:#3b5fd1; bottom:80px; right:50px; animation-delay:-4s;}
+  .panel.academy .shape.s3{ width:120px; height:120px; background:white; top:55%; left:18%; animation-delay:-8s;}
+  .panel.staffhub .shape.s1{ width:340px; height:340px; background:#ffb1ab; top:-80px; right:-80px;}
+  .panel.staffhub .shape.s2{ width:180px; height:180px; background:#ff5a4d; bottom:80px; left:50px; animation-delay:-4s;}
+  .panel.staffhub .shape.s3{ width:120px; height:120px; background:white; top:55%; right:18%; animation-delay:-8s;}
+
+  @keyframes drift{
+    0%,100%{ transform: translate(0,0) scale(1); }
+    50%{ transform: translate(20px,-30px) scale(1.08); }
+  }
+
+  /* Subtle grid pattern overlay */
+  .panel::before{
+    content:"";
+    position:absolute; inset:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events:none;
+    mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%);
+  }
+
+  /* Content card */
+  .content{
+    position: relative;
+    z-index: 2;
+    max-width: 480px;
+    text-align: left;
+    opacity: 0;
+    transform: translateY(30px);
+    animation: rise 1s cubic-bezier(.2,.7,.2,1) forwards;
+  }
+  .panel.academy  .content{ animation-delay: .2s; }
+  .panel.staffhub .content{ animation-delay: .35s; }
+  @keyframes rise{ to{ opacity:1; transform: translateY(0); } }
+
+  /* Logo container — solid white card so logos read cleanly on either color panel */
+  .logo-wrap{
+    width: 150px; height: 150px;
+    border-radius: 28px;
+    background: white;
+    display:flex; align-items:center; justify-content:center;
+    margin-bottom: 28px;
+    overflow:hidden;
+    padding: 14px;
+    box-shadow:
+      0 30px 60px -20px rgba(0,0,0,0.45),
+      0 0 0 1px rgba(255,255,255,0.5) inset;
+    transition: transform .5s cubic-bezier(.2,.7,.2,1);
+  }
+  .panel:hover .logo-wrap{ transform: scale(1.06) rotate(-2deg); }
+  .logo-wrap img{
+    width: 100%; height: 100%; object-fit: contain;
+    display:block;
+  }
+
+  .eyebrow{
+    font-size: 12px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.78);
+    margin-bottom: 14px;
+    font-weight: 500;
+  }
+  .title{
+    font-family: var(--display);
+    font-size: clamp(40px, 4.6vw, 64px);
+    font-weight: 700;
+    line-height: 0.98;
+    letter-spacing: -0.025em;
+    margin-bottom: 18px;
+  }
+  .tagline{
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    color: white;
+    margin-bottom: 22px;
+    display:inline-block;
+    padding: 6px 14px;
+    border: 1px solid rgba(255,255,255,0.35);
+    border-radius: 999px;
+  }
+  .desc{
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .feature-list{
+    list-style:none;
+    margin: 18px 0 32px;
+    display:flex; flex-direction:column; gap:10px;
+  }
+  .feature-list li{
+    font-size: 14.5px;
+    color: rgba(255,255,255,0.88);
+    display:flex; align-items:flex-start; gap:10px;
+  }
+  .feature-list li::before{
+    content:"";
+    width:6px; height:6px; border-radius:50%;
+    background: white;
+    margin-top: 8px;
+    flex-shrink:0;
+  }
+
+  /* Buttons */
+  .cta{
+    display:inline-flex; align-items:center; gap:12px;
+    padding: 16px 28px;
+    background: white;
+    color: var(--ink);
+    font-family: var(--body);
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: 0.02em;
+    border-radius: 999px;
+    text-decoration:none;
+    transition: transform .3s cubic-bezier(.2,.7,.2,1), box-shadow .3s, gap .3s;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+    border: 1px solid rgba(255,255,255,0.4);
+  }
+  .panel.academy  .cta{ color: var(--academy-blue-deep); }
+  .panel.staffhub .cta{ color: var(--staffhub-red-deep); }
+  .cta:hover{
+    transform: translateY(-2px);
+    gap: 18px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.28);
+  }
+  .cta .arrow{
+    width:22px; height:22px;
+    display:inline-flex; align-items:center; justify-content:center;
+    border-radius:50%;
+    background: rgba(0,0,0,0.06);
+    transition: background .3s;
+  }
+  .cta:hover .arrow{ background: rgba(0,0,0,0.12); }
+  .cta svg{ width:12px; height:12px; }
+
+  /* Center divider with diamond */
+  .divider{
+    position:absolute;
+    top:0; bottom: 0;
+    left: 50%;
+    width: 0;
+    z-index: 5;
+    pointer-events:none;
+  }
+  .divider::before{
+    content:"";
+    position:absolute;
+    top:0; bottom:0; left:-1px;
+    width:2px;
+    background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.35), transparent);
+  }
+  .divider .badge{
+    position:absolute;
+    top:50%; left:50%;
+    transform: translate(-50%,-50%) rotate(45deg);
+    width: 64px; height: 64px;
+    background: var(--paper);
+    border-radius: 12px;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  }
+  .divider .badge span{
+    transform: rotate(-45deg);
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 14px;
+    color: var(--ink);
+    letter-spacing: 0.04em;
+  }
+
+  /* ---------- FOOTER ---------- */
+  footer{
+    background: var(--ink);
+    color: #cdd2e0;
+    padding: 64px 40px 28px;
+  }
+  .footer-grid{
+    max-width: 1240px;
+    margin: 0 auto;
+    display:grid;
+    grid-template-columns: 1.2fr 1fr 1fr 1fr;
+    gap: 50px;
+    align-items: flex-start;
+  }
+  .footer-brand .logo{
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 26px;
+    color: white;
+    letter-spacing: -0.02em;
+    margin-bottom: 14px;
+    display:inline-block;
+  }
+  .footer-brand p{
+    font-size: 14px;
+    line-height: 1.65;
+    color: #9aa1b8;
+    max-width: 320px;
+  }
+  .footer-col h4{
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: white;
+    margin-bottom: 18px;
+    font-weight: 600;
+  }
+  .footer-col ul{ list-style:none; display:flex; flex-direction:column; gap:10px;}
+  .footer-col a{
+    color: #9aa1b8;
+    text-decoration:none;
+    font-size: 14px;
+    transition: color .25s;
+  }
+  .footer-col a:hover{ color: white; }
+
+  .footer-bottom{
+    max-width: 1240px;
+    margin: 48px auto 0;
+    padding-top: 24px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    display:flex; justify-content:space-between; align-items:center;
+    flex-wrap: wrap; gap: 16px;
+    font-size: 13px; color: #7a8099;
+  }
+  .socials{ display:flex; gap: 14px; }
+  .socials a{
+    width: 34px; height: 34px;
+    border:1px solid rgba(255,255,255,0.12);
+    border-radius:50%;
+    display:inline-flex; align-items:center; justify-content:center;
+    color:#9aa1b8; transition: .25s;
+  }
+  .socials a:hover{ background: white; color: var(--ink); border-color: white;}
+  .socials svg{ width:14px; height:14px;}
+
+  /* ---------- RESPONSIVE ---------- */
+  @media (max-width: 880px){
+    .split{ flex-direction: column; height: auto; min-height: 0;}
+    .panel{ flex: 1 1 auto !important; min-height: 580px; padding: 90px 28px 60px;}
+    .split:hover .panel,
+    .split .panel:hover{ flex: 1 1 auto;}
+    .divider{ display:none;}
+    .topbar{ padding: 18px 22px; font-size: 11px;}
+    .footer-grid{ grid-template-columns: 1fr 1fr; gap: 36px;}
+    .logo-wrap{ width:130px; height:130px;}
+  }
+  @media (max-width: 520px){
+    .footer-grid{ grid-template-columns: 1fr; }
+    .footer-bottom{ justify-content: flex-start;}
+    .title{ font-size: 38px;}
+    .topbar{ padding: 16px;}
+    .topbar .brand span:last-child{ display:none;}
+  }
+</style>
+</head>
+<body>
+
+<!-- Top header bar (overlays the split) -->
+<div class="topbar">
+  <div class="brand">
+    <span class="dot"></span>
+    <span>BIG CHILDCARE · ACADEMY</span>
+  </div>
+  <a class="back" href="https://bigchildcare.com">← Main Site</a>
+</div>
+
+<!-- ====== SPLIT HERO ====== -->
+<section class="split">
+
+  <!-- LEFT — BIG ACADEMY (LMS) -->
+  <div class="panel academy" id="academy">
+    <div class="shape s1"></div>
+    <div class="shape s2"></div>
+    <div class="shape s3"></div>
+
+    <div class="content">
+      <div class="logo-wrap">
+        <img src="Big_Academy-Logo.png" alt="Big Academy logo">
+      </div>
+
+      <div class="eyebrow">Learning Management System</div>
+      <h1 class="title">Big Academy</h1>
+      <span class="tagline">Learn · Develop · Apply</span>
+      <p class="desc">
+        Your dedicated learning hub for training courses, professional development modules
+        and onboarding pathways — purpose-built for Big Childcare educators and staff.
+      </p>
+      <ul class="feature-list">
+        <li>Training courses & onboarding modules</li>
+        <li>Track learning progress and outcomes</li>
+        <li>Access course materials anytime, anywhere</li>
+      </ul>
+
+      <a class="cta" href="https://academy.bigchildcare.com/login">
+        Login to Big Academy
+        <span class="arrow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Center divider -->
+  <div class="divider" aria-hidden="true">
+    <div class="badge"><span>OR</span></div>
+  </div>
+
+  <!-- RIGHT — STAFFHUB COMPLIANCE PORTAL -->
+  <div class="panel staffhub" id="staffhub">
+    <div class="shape s1"></div>
+    <div class="shape s2"></div>
+    <div class="shape s3"></div>
+
+    <div class="content">
+      <div class="logo-wrap">
+        <img src="StaffHub_Logo.png" alt="Staffhub Compliance Portal logo">
+      </div>
+
+      <div class="eyebrow">Compliance Portal</div>
+      <h1 class="title">Staffhub</h1>
+      <span class="tagline">Compliance · Records · Readiness</span>
+      <p class="desc">
+        Your central portal for staff compliance — manage required documentation,
+        certifications and qualification records, all in one secure platform.
+      </p>
+      <ul class="feature-list">
+        <li>Certifications, WWCC & qualification tracking</li>
+        <li>Compliance documents & expiry reminders</li>
+        <li>Audit-ready records and reporting</li>
+      </ul>
+
+      <a class="cta" href="https://staffhub.online">
+        Login to Staffhub
+        <span class="arrow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </span>
+      </a>
+    </div>
+  </div>
+
+</section>
+
+<!-- ====== FOOTER ====== -->
+<footer>
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <span class="logo">Big Childcare</span>
+      <p>Quality, inclusive early learning environments where every child is supported, nurtured and inspired to thrive.</p>
+    </div>
+
+    <div class="footer-col">
+      <h4>Company</h4>
+      <ul>
+        <li><a href="https://bigchildcare.com/about">About Us</a></li>
+        <li><a href="https://bigchildcare.com/centres">Our Centres</a></li>
+        <li><a href="https://bigchildcare.com/careers">Careers</a></li>
+        <li><a href="https://bigchildcare.com/news">News</a></li>
+      </ul>
+    </div>
+
+    <div class="footer-col">
+      <h4>Portals</h4>
+      <ul>
+        <li><a href="https://academy.bigchildcare.com/login">Big Academy LMS</a></li>
+        <li><a href="https://staffhub.online">Staffhub Compliance</a></li>
+        <li><a href="https://bigchildcare.com/parents">Parent Portal</a></li>
+      </ul>
+    </div>
+
+    <div class="footer-col">
+      <h4>Support</h4>
+      <ul>
+        <li><a href="https://bigchildcare.com/contact">Contact</a></li>
+        <li><a href="https://bigchildcare.com/help">Help Centre</a></li>
+        <li><a href="https://bigchildcare.com/privacy">Privacy Policy</a></li>
+        <li><a href="https://bigchildcare.com/terms">Terms of Use</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="footer-bottom">
+    <div>© <span id="year"></span> Big Childcare Pty Ltd. All rights reserved.</div>
+    <div class="socials">
+      <a href="#" aria-label="Facebook"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 21v-7.5h2.5l.5-3h-3V8.5c0-.9.3-1.5 1.6-1.5H17V4.3c-.3 0-1.3-.1-2.4-.1-2.4 0-4.1 1.5-4.1 4.1v2.2H8v3h2.5V21h3z"/></svg></a>
+      <a href="#" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg></a>
+      <a href="#" aria-label="LinkedIn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.98 3.5C4.98 4.88 3.87 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1s2.48 1.12 2.48 2.5zM.22 8h4.56v14H.22V8zm7.5 0h4.37v1.92h.06c.61-1.15 2.1-2.36 4.32-2.36 4.62 0 5.47 3.04 5.47 7v7.44h-4.56v-6.6c0-1.57-.03-3.6-2.2-3.6-2.2 0-2.54 1.72-2.54 3.49V22H7.72V8z"/></svg></a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('year').textContent = new Date().getFullYear();
+</script>
+
+</body>
+</html>

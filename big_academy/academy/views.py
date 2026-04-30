@@ -2151,6 +2151,7 @@ def edit_assignment(request, assignment_id):
 
     return Response({'message': 'Assignment updated successfully.'}, status=200)
 
+
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
 def delete_assignment(request, assignment_id):
@@ -2159,14 +2160,49 @@ def delete_assignment(request, assignment_id):
         return Response({'error': 'Access denied.'}, status=403)
 
     assignment = get_object_or_404(Assignments, id=assignment_id)
-    
-    # Hard delete all enrolments for this course from assignment source
-    Enrolments.objects.filter(course=assignment.course, source='assignment').delete()
-    
-    # Delete the assignment
+    course = assignment.course
+
+    # Get all enrolments for this course from assignment source
+    enrolments = Enrolments.objects.filter(course=course, source='assignment')
+    user_ids = enrolments.values_list('user_id', flat=True)
+
+    # Delete lesson progress for these users on this course
+    course_lessons = Lessons.objects.filter(course=course)
+    LessonProgress.objects.filter(
+        user_id__in=user_ids,
+        lesson__in=course_lessons
+    ).delete()
+
+    # Get all quizzes for this course
+    course_quizzes = Quizzes.objects.filter(course=course)
+
+    # Delete quiz answers and attempts
+    attempts = QuizAttempts.objects.filter(
+        user_id__in=user_ids,
+        quiz__in=course_quizzes
+    )
+    QuizAnswers.objects.filter(attempt__in=attempts).delete()
+    attempts.delete()
+
+    # Delete unlock requests
+    QuizUnlockRequests.objects.filter(
+        user_id__in=user_ids,
+        quiz__in=course_quizzes
+    ).delete()
+
+    # Delete certificates
+    Certificates.objects.filter(
+        user_id__in=user_ids,
+        course=course
+    ).delete()
+
+    # Delete enrolments
+    enrolments.delete()
+
+    # Delete assignment
     assignment.delete()
-    
-    return Response({'message': 'Assignment and all enrolments deleted.'}, status=200)
+
+    return Response({'message': 'Assignment and all related data deleted.'}, status=200)
 
 # ============================================================
 # TOGGLE ASSIGNMENT

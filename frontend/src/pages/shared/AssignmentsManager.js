@@ -1,33 +1,44 @@
 import React, { useEffect, useState } from 'react';
 import API from '../../api/axios';
-import { ClipboardList, Plus, X, Trash2, Calendar, Filter, Users, CheckSquare, Square } from 'lucide-react';
+import {
+  ClipboardList, Plus, X, Trash2, Calendar,
+  Filter, Users, CheckSquare, Square,
+  Edit, ToggleLeft, ToggleRight, Eye
+} from 'lucide-react';
 
 export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
-  const [assignments, setAssignments] = useState([]);
-  const [courses, setCourses]         = useState([]);
-  const [locations, setLocations]     = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [message, setMessage]         = useState({ text: '', type: '' });
-  const [showForm, setShowForm]       = useState(false);
-  const [saving, setSaving]           = useState(false);
-  const [step, setStep]               = useState(1); // 1=setup, 2=preview users
+  const [assignments, setAssignments]     = useState([]);
+  const [courses, setCourses]             = useState([]);
+  const [locations, setLocations]         = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [message, setMessage]             = useState({ text: '', type: '' });
+  const [showForm, setShowForm]           = useState(false);
+  const [saving, setSaving]               = useState(false);
+  const [step, setStep]                   = useState(1);
+  const [viewModal, setViewModal]         = useState(null);
+  const [editingAssignment, setEditingAssignment] = useState(null);
 
   const [form, setForm] = useState({
-    course_id:       '',
-    assignment_type: 'all',
-    mandatory:       true,
-    due_at:          '',
+    course_id: '', assignment_type: 'all', mandatory: true, due_at: '',
   });
+  const [editForm, setEditForm] = useState({ mandatory: true, due_at: '' });
 
-  const [filters, setFilters]           = useState({ location_ids: [], roles: [] });
-  const [previewUsers, setPreviewUsers] = useState([]);
+  const [filters, setFilters]             = useState({ location_ids: [], roles: [] });
+  const [previewUsers, setPreviewUsers]   = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
-  const [previewing, setPreviewing]     = useState(false);
+  const [previewing, setPreviewing]       = useState(false);
 
   const ROLE_OPTIONS = [
     { value: 'educator',       label: 'Educator'       },
     { value: 'branch_manager', label: 'Branch Manager' },
   ];
+
+  const ROLE_ORDER  = ['area_manager', 'branch_manager', 'educator'];
+  const ROLE_LABELS = {
+    area_manager:   'Area Manager',
+    branch_manager: 'Branch Manager',
+    educator:       'Educator',
+  };
 
   useEffect(() => { fetchData(); }, []);
 
@@ -40,12 +51,8 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
       ]);
       setAssignments(assignRes.data);
       setCourses(courseRes.data.filter(c => c.status === 'published'));
-
-      // Extract unique locations
       const locs = [...new Map(
-        userRes.data
-          .filter(u => u.location)
-          .map(u => [u.location.id, u.location])
+        userRes.data.filter(u => u.location).map(u => [u.location.id, u.location])
       ).values()];
       setLocations(locs);
     } catch (err) {
@@ -69,7 +76,7 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
         roles:        filters.roles,
       });
       setPreviewUsers(res.data.users);
-      setSelectedUsers(res.data.users.map(u => u.id)); // select all by default
+      setSelectedUsers(res.data.users.map(u => u.id));
       setStep(2);
     } catch (err) {
       showMsg('Could not load users.', 'error');
@@ -90,7 +97,7 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
         assignment_type: form.assignment_type,
         target_users:    form.assignment_type === 'filtered' ? selectedUsers : [],
         mandatory:       form.mandatory,
-        due_at:          form.due_at,
+        due_at:          form.due_at || null,
       });
       showMsg(form.assignment_type === 'all'
         ? 'Course assigned to all staff successfully.'
@@ -105,6 +112,38 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
     }
   };
 
+  const handleToggle = async (assignment) => {
+    try {
+      const res = await API.patch(`/assignments/${assignment.id}/toggle/`);
+      showMsg(res.data.message);
+      fetchData();
+    } catch (err) {
+      showMsg('Could not update assignment.', 'error');
+    }
+  };
+
+  const handleDelete = async (assignment) => {
+    if (!window.confirm(`Delete assignment for "${assignment.course_title}"? This will remove enrolments for all users.`)) return;
+    try {
+      await API.delete(`/assignments/${assignment.id}/delete/`);
+      showMsg('Assignment deleted.');
+      fetchData();
+    } catch (err) {
+      showMsg('Could not delete assignment.', 'error');
+    }
+  };
+
+  const handleEditSave = async () => {
+    try {
+      await API.patch(`/assignments/${editingAssignment.id}/edit/`, editForm);
+      showMsg('Assignment updated.');
+      setEditingAssignment(null);
+      fetchData();
+    } catch (err) {
+      showMsg('Could not update assignment.', 'error');
+    }
+  };
+
   const resetForm = () => {
     setShowForm(false);
     setStep(1);
@@ -112,17 +151,6 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
     setFilters({ location_ids: [], roles: [] });
     setPreviewUsers([]);
     setSelectedUsers([]);
-  };
-
-  const handleDelete = async (assignment) => {
-    if (!window.confirm(`Remove assignment for "${assignment.course_title}"?`)) return;
-    try {
-      await API.delete(`/assignments/${assignment.id}/delete/`);
-      showMsg('Assignment removed.');
-      fetchData();
-    } catch (err) {
-      showMsg('Could not remove assignment.', 'error');
-    }
   };
 
   const toggleLocation = (id) => {
@@ -144,28 +172,29 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
   };
 
   const toggleUser = (id) => {
-    setSelectedUsers(prev =>
-      prev.includes(id) ? prev.filter(u => u !== id) : [...prev, id]
-    );
+    setSelectedUsers(prev => prev.includes(id) ? prev.filter(u => u !== id) : [...prev, id]);
   };
 
   const toggleAllUsers = () => {
-    setSelectedUsers(
-      selectedUsers.length === previewUsers.length
-        ? []
-        : previewUsers.map(u => u.id)
-    );
+    setSelectedUsers(selectedUsers.length === previewUsers.length ? [] : previewUsers.map(u => u.id));
+  };
+
+  const getAssignedSummary = (a) => {
+    if (!a.enrolled_users?.length) return '—';
+    const roles = [...new Set(a.enrolled_users.map(u => u.role))];
+    return `${a.enrolled_users.length} user(s) · ${roles.length} role(s)`;
   };
 
   const roleBadge = (role) => {
     const config = {
       educator:       { bg: '#f0fdf4', color: '#059669', border: '#bbf7d0' },
       branch_manager: { bg: '#fffbeb', color: '#b45309', border: '#fde68a' },
+      area_manager:   { bg: '#eef1ff', color: '#1a1f8c', border: '#c7d2fe' },
     };
     const c = config[role] || { bg: '#f8fafc', color: '#64748b', border: '#e2e8f0' };
     return (
       <span style={{ fontSize: '0.7rem', fontWeight: '600', padding: '2px 8px', borderRadius: '20px', background: c.bg, color: c.color, border: `1px solid ${c.border}` }}>
-        {role === 'branch_manager' ? 'Branch Manager' : 'Educator'}
+        {ROLE_LABELS[role] || role}
       </span>
     );
   };
@@ -200,8 +229,7 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
     typeCard:   (isSelected) => ({
       padding: '14px 16px', borderRadius: '8px', cursor: 'pointer',
       border: `2px solid ${isSelected ? accentColor : '#e2e8f0'}`,
-      background: isSelected ? `${accentColor}10` : '#fff',
-      transition: 'all 0.15s',
+      background: isSelected ? `${accentColor}10` : '#fff', transition: 'all 0.15s',
     }),
     typeTitle:  (isSelected) => ({ fontSize: '0.875rem', fontWeight: '700', color: isSelected ? accentColor : '#1e293b', marginBottom: '3px' }),
     typeSub:    { fontSize: '0.75rem', color: '#94a3b8' },
@@ -248,19 +276,32 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
     badge:  (bg, color, border, label) => (
       <span style={{ fontSize: '0.72rem', fontWeight: '700', padding: '3px 9px', borderRadius: '20px', background: bg, color, border: `1px solid ${border}` }}>{label}</span>
     ),
-    deleteBtn: {
-      display: 'inline-flex', alignItems: 'center', gap: '5px',
-      padding: '5px 10px', fontSize: '0.78rem', fontWeight: '600',
-      background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca',
-      borderRadius: '6px', cursor: 'pointer',
-    },
+    iconBtn: (bg, color, border) => ({
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      width: '30px', height: '30px', borderRadius: '6px', cursor: 'pointer',
+      background: bg, color, border: `1px solid ${border}`, marginRight: '4px',
+    }),
     emptyState: { textAlign: 'center', padding: '48px 24px', color: '#94a3b8' },
-  };
-
-  const assignmentLabel = (a) => {
-    if (a.assignment_type === 'all')  return S.badge('#eff6ff', '#2563eb', '#bfdbfe', 'All Staff');
-    if (a.assignment_type === 'user') return S.badge('#f0fdf4', '#059669', '#bbf7d0', `Individual`);
-    return S.badge('#f8fafc', '#64748b', '#e2e8f0', a.target_value);
+    overlay: {
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+    },
+    modal: {
+      background: '#fff', borderRadius: '12px', padding: '24px',
+      width: '100%', maxWidth: '500px', maxHeight: '80vh',
+      overflow: 'hidden', display: 'flex', flexDirection: 'column',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+    },
+    modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' },
+    modalTitle:  { fontSize: '1rem', fontWeight: '700', color: '#0f172a' },
+    modalBody:   { overflowY: 'auto', flex: 1 },
+    roleGroup:   { marginBottom: '16px' },
+    roleHeader:  { fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' },
+    modalUserRow: {
+      display: 'flex', alignItems: 'center', gap: '10px',
+      padding: '8px 12px', borderRadius: '8px', background: '#f8fafc',
+      border: '1px solid #f1f5f9', marginBottom: '6px',
+    },
   };
 
   if (loading) return <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>Loading assignments...</p>;
@@ -276,15 +317,12 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
 
       {message.text && <div style={S.message(message.type)}>{message.text}</div>}
 
+      {/* ── New Assignment Form ── */}
       {showForm && (
         <div style={S.formCard}>
-
-          {/* ── Step 1: Setup ── */}
           {step === 1 && (
             <>
               <div style={S.formTitle}>New Assignment</div>
-
-              {/* Course */}
               <div style={S.formGroup}>
                 <label style={S.label}>Course</label>
                 <select style={S.select} value={form.course_id}
@@ -293,8 +331,6 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
                   {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
                 </select>
               </div>
-
-              {/* Assignment Type */}
               <div style={S.formGroup}>
                 <label style={S.label}>Assign To</label>
                 <div style={S.typeGrid}>
@@ -310,39 +346,29 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
                   </div>
                 </div>
               </div>
-
-              {/* Filters — only show when filtered */}
               {form.assignment_type === 'filtered' && (
                 <div style={S.filterSection}>
                   <div style={S.filterTitle}><Filter size={14} /> Filter Users</div>
-
                   <div style={{ marginBottom: '12px' }}>
                     <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>BY LOCATION</div>
                     <div style={S.chipRow}>
                       {locations.map(loc => (
                         <div key={loc.id} style={S.chip(filters.location_ids.includes(loc.id))}
-                          onClick={() => toggleLocation(loc.id)}>
-                          {loc.name}
-                        </div>
+                          onClick={() => toggleLocation(loc.id)}>{loc.name}</div>
                       ))}
                     </div>
                   </div>
-
                   <div>
                     <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>BY ROLE</div>
                     <div style={S.chipRow}>
                       {ROLE_OPTIONS.map(r => (
                         <div key={r.value} style={S.chip(filters.roles.includes(r.value))}
-                          onClick={() => toggleRole(r.value)}>
-                          {r.label}
-                        </div>
+                          onClick={() => toggleRole(r.value)}>{r.label}</div>
                       ))}
                     </div>
                   </div>
                 </div>
               )}
-
-              {/* Due date + mandatory */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
                 <div style={S.formGroup}>
                   <label style={S.label}>Due Date (optional)</label>
@@ -353,12 +379,11 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.875rem', color: '#374151', fontWeight: '500' }}>
                     <input type="checkbox" checked={form.mandatory}
                       onChange={e => setForm({ ...form, mandatory: e.target.checked })}
-                      style={{ width: '16px', height: '16px', accentColor }} />
+                      style={{ width: '16px', height: '16px' }} />
                     Mandatory
                   </label>
                 </div>
               </div>
-
               <div style={S.btnRow}>
                 {form.assignment_type === 'filtered' ? (
                   <button style={S.submitBtn(!form.course_id || previewing)} onClick={handlePreview} disabled={!form.course_id || previewing}>
@@ -373,52 +398,37 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
             </>
           )}
 
-          {/* ── Step 2: Select Users ── */}
           {step === 2 && (
             <>
               <div style={S.formTitle}>Select Users to Assign</div>
-
               <div style={S.previewHeader}>
-                <span style={S.previewCount}>
-                  {previewUsers.length} user(s) found — {selectedUsers.length} selected
-                </span>
+                <span style={S.previewCount}>{previewUsers.length} user(s) found — {selectedUsers.length} selected</span>
                 <button style={S.selectAll} onClick={toggleAllUsers}>
                   {selectedUsers.length === previewUsers.length
                     ? <><CheckSquare size={14} /> Deselect All</>
                     : <><Square size={14} /> Select All</>}
                 </button>
               </div>
-
               {previewUsers.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8', fontSize: '0.875rem' }}>
-                  No users match the selected filters.
-                </div>
+                <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8', fontSize: '0.875rem' }}>No users match the selected filters.</div>
               ) : (
                 <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
                   {previewUsers.map(u => (
-                    <div key={u.id} style={S.userRow2(selectedUsers.includes(u.id))}
-                      onClick={() => toggleUser(u.id)}>
+                    <div key={u.id} style={S.userRow2(selectedUsers.includes(u.id))} onClick={() => toggleUser(u.id)}>
                       <div style={S.userAvatar}>{u.name.split(' ').map(n => n[0]).join('')}</div>
                       <div style={{ flex: 1 }}>
                         <div style={S.userName2}>{u.name}</div>
                         <div style={S.userLoc}>{u.location}</div>
                       </div>
                       {roleBadge(u.role)}
-                      {selectedUsers.includes(u.id)
-                        ? <CheckSquare size={16} color={accentColor} />
-                        : <Square size={16} color="#cbd5e1" />}
+                      {selectedUsers.includes(u.id) ? <CheckSquare size={16} color={accentColor} /> : <Square size={16} color="#cbd5e1" />}
                     </div>
                   ))}
                 </div>
               )}
-
               <div style={S.btnRow}>
                 <button style={S.backBtn} onClick={() => setStep(1)}>← Back</button>
-                <button
-                  style={S.submitBtn(selectedUsers.length === 0 || saving)}
-                  onClick={handleSubmit}
-                  disabled={selectedUsers.length === 0 || saving}
-                >
+                <button style={S.submitBtn(selectedUsers.length === 0 || saving)} onClick={handleSubmit} disabled={selectedUsers.length === 0 || saving}>
                   {saving ? 'Assigning...' : `Assign to ${selectedUsers.length} User(s)`}
                 </button>
               </div>
@@ -427,7 +437,72 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
         </div>
       )}
 
-      {/* Assignments Table */}
+      {/* ── Edit Assignment Modal ── */}
+      {editingAssignment && (
+        <div style={S.overlay} onClick={() => setEditingAssignment(null)}>
+          <div style={S.modal} onClick={e => e.stopPropagation()}>
+            <div style={S.modalHeader}>
+              <div style={S.modalTitle}>Edit Assignment</div>
+              <button onClick={() => setEditingAssignment(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}><X size={18} /></button>
+            </div>
+            <div style={S.formGroup}>
+              <label style={S.label}>Due Date (optional)</label>
+              <input type="date" style={S.input} value={editForm.due_at}
+                onChange={e => setEditForm({ ...editForm, due_at: e.target.value })} />
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.875rem', color: '#374151', fontWeight: '500' }}>
+                <input type="checkbox" checked={editForm.mandatory}
+                  onChange={e => setEditForm({ ...editForm, mandatory: e.target.checked })}
+                  style={{ width: '16px', height: '16px' }} />
+                Mandatory
+              </label>
+            </div>
+            <button style={S.submitBtn(false)} onClick={handleEditSave}>Save Changes</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Assigned To Modal ── */}
+      {viewModal && (
+        <div style={S.overlay} onClick={() => setViewModal(null)}>
+          <div style={S.modal} onClick={e => e.stopPropagation()}>
+            <div style={S.modalHeader}>
+              <div style={S.modalTitle}>Assigned To — {viewModal.course_title}</div>
+              <button onClick={() => setViewModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}><X size={18} /></button>
+            </div>
+            <div style={S.modalBody}>
+              {!viewModal.enrolled_users?.length ? (
+                <div style={{ color: '#94a3b8', fontSize: '0.875rem', textAlign: 'center', padding: '24px' }}>No users enrolled.</div>
+              ) : (
+                ROLE_ORDER.map(role => {
+                  const users = viewModal.enrolled_users?.filter(u => u.role === role) || [];
+                  if (!users.length) return null;
+                  return (
+                    <div key={role} style={S.roleGroup}>
+                      <div style={S.roleHeader}>{ROLE_LABELS[role]} ({users.length})</div>
+                      {users.map(u => (
+                        <div key={u.id} style={S.modalUserRow}>
+                          <div style={{ ...S.userAvatar, width: '28px', height: '28px', fontSize: '0.7rem' }}>
+                            {u.name.split(' ').map(n => n[0]).join('')}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#1e293b' }}>{u.name}</div>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{u.location}</div>
+                          </div>
+                          {roleBadge(u.role)}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Assignments Table ── */}
       {assignments.length === 0 ? (
         <div style={S.emptyState}>
           <ClipboardList size={40} color="#cbd5e1" style={{ marginBottom: '12px' }} />
@@ -438,16 +513,29 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
           <table style={S.table}>
             <thead>
               <tr>
-                {['Course', 'Assigned To', 'Mandatory', 'Due Date', 'Actions'].map(h => (
+                {['Course', 'Assigned To', 'Status', 'Mandatory', 'Due Date', 'Actions'].map(h => (
                   <th key={h} style={S.th}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {assignments.map(a => (
-                <tr key={a.id}>
+                <tr key={a.id} style={{ opacity: a.is_active ? 1 : 0.6 }}>
                   <td style={{ ...S.td, ...S.nameTd }}>{a.course_title}</td>
-                  <td style={S.td}>{assignmentLabel(a)}</td>
+                  <td style={S.td}>
+                    <button
+                      title="View assigned users"
+                      onClick={() => setViewModal(a)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: accentColor, fontSize: '0.82rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '5px', padding: 0 }}
+                    >
+                      <Eye size={13} /> {getAssignedSummary(a)}
+                    </button>
+                  </td>
+                  <td style={S.td}>
+                    {a.is_active
+                      ? S.badge('#f0fdf4', '#059669', '#bbf7d0', 'Active')
+                      : S.badge('#f8fafc', '#94a3b8', '#e2e8f0', 'Disabled')}
+                  </td>
                   <td style={S.td}>
                     {a.mandatory
                       ? S.badge('#fef2f2', '#ef4444', '#fecaca', 'Mandatory')
@@ -456,14 +544,31 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
                   <td style={S.td}>
                     {a.due_at ? (
                       <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#64748b', fontSize: '0.82rem' }}>
-                        <Calendar size={12} />
-                        {new Date(a.due_at).toLocaleDateString()}
+                        <Calendar size={12} /> {new Date(a.due_at).toLocaleDateString()}
                       </span>
                     ) : '—'}
                   </td>
                   <td style={S.td}>
-                    <button style={S.deleteBtn} onClick={() => handleDelete(a)}>
-                      <Trash2 size={12} /> Remove
+                    <button
+                      title="Edit assignment"
+                      style={S.iconBtn('#eff6ff', '#2563eb', '#bfdbfe')}
+                      onClick={() => { setEditingAssignment(a); setEditForm({ mandatory: a.mandatory, due_at: a.due_at ? a.due_at.split('T')[0] : '' }); }}
+                    >
+                      <Edit size={14} />
+                    </button>
+                    <button
+                      title={a.is_active ? 'Disable assignment' : 'Enable assignment'}
+                      style={S.iconBtn(a.is_active ? '#fefce8' : '#f0fdf4', a.is_active ? '#d97706' : '#059669', a.is_active ? '#fde68a' : '#bbf7d0')}
+                      onClick={() => handleToggle(a)}
+                    >
+                      {a.is_active ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                    </button>
+                    <button
+                      title="Delete assignment"
+                      style={S.iconBtn('#fef2f2', '#ef4444', '#fecaca')}
+                      onClick={() => handleDelete(a)}
+                    >
+                      <Trash2 size={14} />
                     </button>
                   </td>
                 </tr>

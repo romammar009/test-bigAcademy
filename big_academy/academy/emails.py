@@ -5,7 +5,7 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-LOGIN_URL = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+LOGIN_URL = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000') + '/bigacademy-login2026'
 
 
 def _send(subject, template_name, context, to_email):

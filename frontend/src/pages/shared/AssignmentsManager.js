@@ -70,6 +70,12 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
 
   const handlePreview = async () => {
     if (!form.course_id) { showMsg('Please select a course first.', 'error'); return; }
+
+    if (isEditing && previewUsers.length > 0) {
+      setStep(2);
+      return;
+    }
+
     setPreviewing(true);
     try {
       const res = await API.post('/assignments/preview/', {
@@ -405,7 +411,7 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
               <div style={S.btnRow}>
                 {form.assignment_type === 'filtered' ? (
                   <button style={S.submitBtn(!form.course_id || previewing)} onClick={handlePreview} disabled={!form.course_id || previewing}>
-                    {previewing ? 'Loading...' : <><Users size={14} style={{ marginRight: '6px' }} /> Preview Users</>}
+                    {previewing ? 'Loading...' : <><Users size={14} style={{ marginRight: '6px' }} /> {isEditing ? 'View/Edit Users' : 'Preview Users'}</>}
                   </button>
                 ) : (
                   <button style={S.submitBtn(!form.course_id || saving)} onClick={isEditing ? handleEditSave : handleSubmit} disabled={!form.course_id || saving}>
@@ -559,12 +565,26 @@ export default function AssignmentsManager({ accentColor = '#1a1f8c' }) {
                         setIsEditing(true);
                         setShowForm(true);
                         setStep(1);
+  
+                        const enrolledUsers = a.enrolled_users || [];
+  
+                        // Derive locations and roles from enrolled users
+                        const derivedLocationIds = [...new Set(
+                          enrolledUsers
+                            .map(u => locations.find(l => l.name === u.location)?.id)
+                            .filter(Boolean)
+                        )];
+                        const derivedRoles = [...new Set(enrolledUsers.map(u => u.role))];
+  
+                        setFilters({ location_ids: derivedLocationIds, roles: derivedRoles });
                         setForm({
                           course_id:       String(a.course_id),
                           assignment_type: a.assignment_type,
                           mandatory:       a.mandatory,
-                          due_at:          a.due_at ? a.due_at.split('T')[0] : '',
+                         due_at:          a.due_at ? a.due_at.split('T')[0] : '',
                         });
+                        setPreviewUsers(enrolledUsers);
+                        setSelectedUsers(enrolledUsers.map(u => u.id));
                       }}
                     >
                   <Edit size={14} />

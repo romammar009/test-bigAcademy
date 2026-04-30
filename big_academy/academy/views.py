@@ -866,6 +866,14 @@ def my_learning(request):
         return Response({'error': 'User not found.'}, status=status.HTTP_403_FORBIDDEN)
 
     enrolments = Enrolments.objects.filter(user=academy_user)
+    
+    # For educators and branch managers, hide enrolments from disabled assignments
+    if academy_user.role in ['educator', 'branch_manager']:
+        active_course_ids = Assignments.objects.filter(
+            is_active=True
+        ).values_list('course_id', flat=True)
+        enrolments = enrolments.filter(course_id__in=active_course_ids)
+
     serializer = EnrolmentDetailSerializer(enrolments, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -1583,18 +1591,21 @@ def report_staff(request):
         return Response({'error': 'Access denied.'}, status=403)
 
     if academy_user.role == 'hr':
-        users = Users.objects.filter(role='educator', status='active')
+       users = Users.objects.filter(role__in=['educator', 'branch_manager'], status='active')
     elif academy_user.role == 'area_manager':
-        assigned_location_ids = SuperAdminLocations.objects.filter(
-            user=academy_user
-        ).values_list('location_id', flat=True)
-        users = Users.objects.filter(
-            role='educator', status='active',
-            location_id__in=assigned_location_ids
-        )
+       assigned_location_ids = SuperAdminLocations.objects.filter(
+           user=academy_user
+       ).values_list('location_id', flat=True)
+       users = Users.objects.filter(
+          role__in=['educator', 'branch_manager'],
+          status='active',
+          location_id__in=assigned_location_ids
+       )
     else:
         users = Users.objects.filter(
-            role='educator', status='active', location=academy_user.location
+          role__in=['educator', 'branch_manager'],
+          status='active',
+          location=academy_user.location
         )
 
     data = []
@@ -1621,6 +1632,7 @@ def report_staff(request):
             'user_id':         user.id,
             'name':            f"{user.first_name} {user.last_name}",
             'email':           user.email,
+            'role':            user.role,
             'location':        user.location.name if user.location else '—',
             'completed':       completed,
             'in_progress':     in_progress,

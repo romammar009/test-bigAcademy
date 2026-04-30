@@ -154,9 +154,8 @@ export default function CourseViewer({ enrolment, onBack }) {
   const renderLessonContent = (lesson) => {
     if (lesson.content_type === 'video') return (
       <div style={{ marginBottom: '16px' }}>
-        {console.log('VIDEO URL:', lesson.content_url)}
         <video controls style={{ width: '100%', borderRadius: '8px' }}
-          src={`http://localhost:8000${lesson.content_url}`} />
+          src={lesson.content_url} />
       </div>
     );
     if (lesson.content_type === 'pdf') return (
@@ -167,7 +166,7 @@ export default function CourseViewer({ enrolment, onBack }) {
         dangerouslySetInnerHTML={{ __html: lesson.content_url }} />
     );
     if (lesson.content_type === 'ppt') return (
-      <iframe src={`https://docs.google.com/viewer?url=${encodeURIComponent('http://localhost:8000' + lesson.content_url)}&embedded=true`} width="100%" height="500px" style={{ borderRadius: '8px', border: 'none', marginBottom: '16px' }} />
+      <iframe src={`https://docs.google.com/viewer?url=${encodeURIComponent(window.location.origin + lesson.content_url)}&embedded=true`} width="100%" height="500px" style={{ borderRadius: '8px', border: 'none', marginBottom: '16px' }} />
     );
     if (lesson.content_type === 'youtube') return (
       <div style={{ aspectRatio: '16/9', marginBottom: '16px' }}>

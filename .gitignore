@@ -1,20 +1,42 @@
+ # Virtual environment
 venv/
+
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
+
+# Environment variables
 .env
+
+# Django
 db.sqlite3
+*.log
+local_settings.py
+
+# React Frontend
 node_modules/
 build/
 dist/
-*.log
-.DS_Store
-.claude/
-.vscode/big_academy/staticfiles/
-.vscode/
 
+# Claude AI
+.claude/
+CLAUDE.md
+
+# VSCode
+.vscode/
+.vscode/big_academy/staticfiles/
+
+# Windows
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Media files
 big_academy/media/
 
+
+# Graphify
 .graphify_python
 .graphifyignore
 graphify-out/

@@ -1,6 +1,8 @@
+from datetime import timedelta
+
 from django.contrib import admin
-from django.utils import timezone
 from django.contrib import messages
+from django.utils import timezone
 from .models import (
     Locations, Users, Courses, CourseModules,
     Lessons, Assignments, Enrolments, LessonProgress,
@@ -44,13 +46,16 @@ class UsersAdmin(admin.ModelAdmin):
         return form
 
     def save_model(self, request, obj, form, change):
+        raw = form.cleaned_data.get('password_hash', '')
+        # Hash if the value isn't already a bcrypt hash
+        if raw and not raw.startswith(('$2b$', '$2a$', '$2y$')):
+            obj.password_hash = bcrypt.hashpw(
+                raw.encode('utf-8'),
+                bcrypt.gensalt()
+            ).decode('utf-8')
+            obj.must_change_password     = True
+            obj.temp_password_expires_at = timezone.now() + timedelta(hours=24)
         if not change:
-            raw_password = form.cleaned_data.get('password_hash')
-            if raw_password:
-                obj.password_hash = bcrypt.hashpw(
-                    raw_password.encode('utf-8'),
-                    bcrypt.gensalt()
-                ).decode('utf-8')
             obj.created_at = timezone.now()
         obj.updated_at = timezone.now()
         super().save_model(request, obj, form, change)

@@ -15,7 +15,8 @@ urlpatterns = [
     # USER MANAGEMENT
     path('users/register/',                    views.register_user,  name='register-user'),
     path('users/<int:user_id>/update/',        views.update_user,    name='update-user'),
-    path('users/<int:user_id>/offboard/',      views.offboard_user,  name='offboard-user'),
+    path('users/<int:user_id>/offboard/',      views.offboard_user,       name='offboard-user'),
+    path('users/<int:user_id>/reset-password/', views.reset_user_password, name='reset-user-password'),
     path('users/', views.list_users, name='list-users'),
 
     # COURSES

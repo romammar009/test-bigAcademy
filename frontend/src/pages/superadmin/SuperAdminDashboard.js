@@ -11,11 +11,14 @@ import SuperAdminUnlockRequests from './SuperAdminUnlockRequests';
 import SuperAdminReports from './SuperAdminReports';
 import NotificationBell from '../../components/NotificationBell';
 import logo from '../../BigChildcare-Logo.png';
+import SuperAdminCertificates from './SuperAdminCertificates';
+import SuperAdminTemplates from './SuperAdminTemplates';
 import {
   LayoutDashboard, Users, Unlock, BarChart2,
   BookOpen, ClipboardList, GraduationCap,
   LogOut, ChevronLeft, ChevronRight,
   BookMarked, Bell,
+  Award, ChevronDown, FileText, LayoutTemplate,
 } from 'lucide-react';
 
 const SIDEBAR_ITEMS = [
@@ -37,7 +40,16 @@ export default function AreaManagerDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const activeItem = SIDEBAR_ITEMS.find(i => location.pathname.startsWith(i.path)) || SIDEBAR_ITEMS[0];
+  const [certOpen, setCertOpen] = useState(false);
+
+  const CERT_ITEMS = {
+    '/area-manager/certification/certificates': { key: 'cert-certificates', icon: FileText,       label: 'Certificate'           },
+    '/area-manager/certification/templates':    { key: 'cert-templates',    icon: LayoutTemplate, label: 'Certificate Templates' },
+  };
+
+  const activeItem = CERT_ITEMS[location.pathname]
+    || SIDEBAR_ITEMS.find(i => location.pathname.startsWith(i.path))
+    || SIDEBAR_ITEMS[0];
 
   useEffect(() => {
     if (location.pathname === '/area-manager' || location.pathname === '/area-manager/') {
@@ -296,6 +308,38 @@ export default function AreaManagerDashboard() {
               )}
             </div>
           ))}
+
+          {/* Certification dropdown */}
+          <div
+            style={S.navItem(location.pathname.startsWith('/area-manager/certification'))}
+            onClick={() => sidebarOpen ? setCertOpen(o => !o) : navigate('/area-manager/certification/certificates')}
+          >
+            <Award size={18} style={{ flexShrink: 0 }} />
+            {sidebarOpen && <span style={S.navText}>Certification</span>}
+            {sidebarOpen && (
+              <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+                {certOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </span>
+            )}
+          </div>
+          {sidebarOpen && certOpen && (
+            <>
+              <div
+                style={{ ...S.navItem(location.pathname === '/area-manager/certification/certificates'), paddingLeft: '38px' }}
+                onClick={() => navigate('/area-manager/certification/certificates')}
+              >
+                <FileText size={16} style={{ flexShrink: 0 }} />
+                <span style={S.navText}>Certificate</span>
+              </div>
+              <div
+                style={{ ...S.navItem(location.pathname === '/area-manager/certification/templates'), paddingLeft: '38px' }}
+                onClick={() => navigate('/area-manager/certification/templates')}
+              >
+                <LayoutTemplate size={16} style={{ flexShrink: 0 }} />
+                <span style={S.navText}>Templates</span>
+              </div>
+            </>
+          )}
         </div>
 
         <div style={S.sidebarFooter}>
@@ -334,7 +378,9 @@ export default function AreaManagerDashboard() {
           {activeItem?.key === 'requests'      && <SuperAdminUnlockRequests />}
           {activeItem?.key === 'staff'         && <SuperAdminStaff />}
           {activeItem?.key === 'reports'       && <SuperAdminReports />}
-          {activeItem?.key === 'notifications' && <NotificationsPage />}
+          {activeItem?.key === 'notifications'       && <NotificationsPage />}
+          {activeItem?.key === 'cert-certificates' && <SuperAdminCertificates />}
+          {activeItem?.key === 'cert-templates'    && <SuperAdminTemplates />}
         </div>
       </div>
     </div>
